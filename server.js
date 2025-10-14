@@ -5,6 +5,46 @@ const cors = require("cors");
 const app = express();
 const port = process.env.PORT || 5000;
 
+
+
+
+
+
+// 2. Define the allowed origins from environment variables
+// Use the exact URL of your Netlify site.
+const allowedOrigins = [
+    // Your Netlify Frontend URL (The one getting blocked)
+    'https://seidforum.netlify.app',
+    // Optional: Add localhost for local development testing
+    'http://localhost:3000', 
+  'http://localhost:5173',
+  'http://localhost:5000',
+    // Add any other domains you might use
+];
+
+const corsOptions = {
+    origin: (origin, callback) => {
+        // Allow requests with no origin (like mobile apps or curl requests)
+        // OR allow the origin if it is in our allowedOrigins list
+        if (!origin || allowedOrigins.includes(origin)) {
+            callback(null, true);
+        } else {
+            // Block the request if the origin is not allowed
+            callback(new Error('Not allowed by CORS'));
+        }
+    },
+    // Specify the allowed HTTP methods
+    methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
+    credentials: true, // Allow cookies/authorization headers to be sent
+    optionsSuccessStatus: 204 // For preflight requests
+};
+
+// 3. Apply the CORS middleware
+app.use(cors(corsOptions));
+
+
+
+
 // Database connection
 const dbConnection = require("./config/dbConfig");
 
