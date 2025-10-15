@@ -6,6 +6,8 @@ dotenv.config();
 async function authMiddleware(req, res, next) {
   const authHeader = req.headers.authorization;
 
+  // console.log("Authorization Header:", authHeader);
+
   if (!authHeader || !authHeader.startsWith("Bearer ")) {
     return res
       .status(StatusCodes.UNAUTHORIZED)
@@ -15,9 +17,8 @@ async function authMiddleware(req, res, next) {
   try {
     // If the token format is 'Bearer <token>', extract the token
     const token = authHeader.split(" ")[1];
-    // console.log(token);
-    // console.log(authHeader);
-const secret = process.env.JWT_SECRET;
+ 
+    const secret = process.env.JWT_SECRET;
     const { username, userid } = jwt.verify(token, secret);
 
     // Attach user info to the request object

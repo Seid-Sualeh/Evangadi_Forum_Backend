@@ -1,4 +1,3 @@
-
 const dbConnection = require("../config/dbConfig");
 const bcrypt = require("bcrypt");
 const { StatusCodes } = require("http-status-codes");
@@ -6,6 +5,7 @@ const jwt = require("jsonwebtoken");
 const dotenv = require("dotenv");
 const crypto = require("crypto");
 const nodemailer = require("nodemailer");
+const { error } = require("console");
 
 dotenv.config();
 
@@ -13,8 +13,8 @@ dotenv.config();
 async function register(req, res) {
   const { username, firstname, lastname, email, password } = req.body;
 
-  const currentTimestamp = new Date();
-  currentTimestamp.setHours(currentTimestamp.getHours() + 3);
+  // const currentTimestamp = new Date();
+  // currentTimestamp.setHours(currentTimestamp.getHours() + 3);
   const formattedTimestamp = currentTimestamp
     .toISOString()
     .slice(0, 19)
@@ -54,7 +54,7 @@ async function register(req, res) {
 
     return res
       .status(StatusCodes.CREATED)
-      .json({ Msg: "User created successfully." });
+      .json({ Msg: "You Registered Successfully." });
   } catch (error) {
     console.log(error);
     return res
@@ -82,14 +82,14 @@ async function login(req, res) {
     if (user.length === 0) {
       return res
         .status(StatusCodes.NOT_FOUND)
-        .json({ msg: "Invalid credentials." });
+        .json({ msg: "Please Signup first" });
     }
 
     const isMatch = await bcrypt.compare(password, user[0].password);
     if (!isMatch) {
       return res
         .status(StatusCodes.BAD_REQUEST)
-        .json({ msg: "Invalid credentials." });
+        .json({ msg: "Please enter correct password" });
     }
 
     const username = user[0].username;
@@ -97,6 +97,8 @@ async function login(req, res) {
     const token = jwt.sign({ username, userid }, process.env.JWT_SECRET, {
       expiresIn: "30d",
     });
+
+    // console.log("Generated Token:", token); // Logging the generated token
 
     return res
       .status(StatusCodes.OK)
@@ -113,6 +115,7 @@ async function login(req, res) {
 function check(req, res) {
   const username = req.user.username;
   const userid = req.user.userid;
+
   return res.status(StatusCodes.OK).json({ username, userid });
 }
 
@@ -125,9 +128,10 @@ async function forgotPassword(req, res) {
 
   try {
     // Check if user exists
-    const [user] = await dbConnection.query("SELECT * FROM users WHERE email = ?", [
-      email,
-    ]);
+    const [user] = await dbConnection.query(
+      "SELECT * FROM users WHERE email = ?",
+      [email]
+    );
     if (!user.length)
       return res.status(404).json({ msg: "No account found with this email" });
 
@@ -159,7 +163,7 @@ async function forgotPassword(req, res) {
       to: email,
       subject: "Password Reset Request",
       html: `
-        <h3>Assalamu Alaikum!</h3>
+        <h3>Welcome!</h3>
         <p>You requested a password reset. Click the button below:</p>
         <a href="${resetURL}" style="background:#007bff;color:white;padding:10px 20px;text-decoration:none;border-radius:5px;">Reset Password</a>
         <p>This link will expire in 1 hour.</p>
@@ -183,9 +187,10 @@ async function resetPassword(req, res) {
   if (!password) return res.status(400).json({ msg: "Password is required" });
 
   try {
-    const [user] = await dbConnection.query("SELECT * FROM users WHERE reset_token = ?", [
-      token,
-    ]);
+    const [user] = await dbConnection.query(
+      "SELECT * FROM users WHERE reset_token = ?",
+      [token]
+    );
     if (!user.length)
       return res.status(400).json({ msg: "Invalid or expired token" });
 
@@ -210,19 +215,17 @@ async function resetPassword(req, res) {
   }
 }
 
-
 // ======================== GOOGLE LOGIN ========================
-
-
 
 const googleLogin = async (req, res) => {
   const { email, username, googleId } = req.body;
 
   try {
     // Check if user already exists
-    const [user] = await dbConnection.query("SELECT * FROM users WHERE email = ?", [
-      email,
-    ]);
+    const [user] = await dbConnection.query(
+      "SELECT * FROM users WHERE email = ?",
+      [email]
+    );
 
     if (user.length > 0) {
       // Generate JWT token
@@ -230,7 +233,7 @@ const googleLogin = async (req, res) => {
         { userid: user[0].userid },
         process.env.JWT_SECRET,
         {
-          expiresIn: "1d",
+          expiresIn: "30d",
         }
       );
       return res.status(200).json({ message: "Login successful", token });
@@ -243,15 +246,16 @@ const googleLogin = async (req, res) => {
       [username, email, googleId]
     );
 
-    const [newUser] = await dbConnection.query("SELECT * FROM users WHERE email = ?", [
-      email,
-    ]);
+    const [newUser] = await dbConnection.query(
+      "SELECT * FROM users WHERE email = ?",
+      [email]
+    );
 
     const token = jwt.sign(
       { userid: newUser[0].userid },
       process.env.JWT_SECRET,
       {
-        expiresIn: "1d",
+        expiresIn: "30d",
       }
     );
 
@@ -262,14 +266,6 @@ const googleLogin = async (req, res) => {
   }
 };
 
-
-
-
-
-
-
-
-
 module.exports = {
   register,
   login,
@@ -278,4 +274,3 @@ module.exports = {
   googleLogin,
   resetPassword,
 };
-
