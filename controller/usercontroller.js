@@ -7,18 +7,16 @@ const crypto = require("crypto");
 const nodemailer = require("nodemailer");
 const { error } = require("console");
 
+
+
 dotenv.config();
 
 // ======================== REGISTER ========================
 async function register(req, res) {
   const { username, firstname, lastname, email, password } = req.body;
 
-  // const currentTimestamp = new Date();
-  // currentTimestamp.setHours(currentTimestamp.getHours() + 3);
-  const formattedTimestamp = currentTimestamp
-    .toISOString()
-    .slice(0, 19)
-    .replace("T", " ");
+  const createdAt = new Date().toISOString().slice(0, 19).replace("T", " ");
+ 
 
   if (!username || !firstname || !lastname || !email || !password) {
     return res
@@ -49,7 +47,7 @@ async function register(req, res) {
 
     await dbConnection.query(
       "INSERT INTO users (username, firstname, lastname, email, password, createdAt) VALUES (?, ?, ?, ?, ?, ?)",
-      [username, firstname, lastname, email, hashedPassword, formattedTimestamp]
+      [username, firstname, lastname, email, hashedPassword, createdAt]
     );
 
     return res
@@ -150,7 +148,7 @@ async function forgotPassword(req, res) {
       service: "gmail",
       auth: {
         user: process.env.EMAIL_USER,
-        pass: process.env.EMAIL_PASS, // App password
+        pass: process.env.EMAIL_PASS,
       },
     });
 
@@ -177,9 +175,7 @@ async function forgotPassword(req, res) {
   }
 }
 
-// ======================
-// Reset Password
-// ======================
+// ====================== Reset Password ======================
 async function resetPassword(req, res) {
   const { token } = req.params;
   const { password } = req.body;
@@ -239,7 +235,7 @@ const googleLogin = async (req, res) => {
       return res.status(200).json({ message: "Login successful", token });
     }
 
-    // Insert new Google user (firstname, lastname, password → NULL)
+  
     await dbConnection.query(
       `INSERT INTO users (username, email, google_id, firstname, lastname, password)
        VALUES (?, ?, ?, NULL, NULL, NULL)`,

@@ -1,22 +1,10 @@
 const { StatusCodes } = require("http-status-codes");
 const dbConnection = require("../config/dbConfig");
-// const { v4: uuidv4 } = require("uuid");
-// post questions / ask questions
+const { v4: uuidv4 } = require("uuid"); 
+
+// ✅ Post a new question WITH UUID
 async function postQuestion(req, res) {
   const { userid, title, description } = req.body;
-  // Create a new date object
-  const currentTimestamp = new Date();
-
-  // Adjust the time by UTC+3 hours
-  const adjustedDate = new Date(
-    currentTimestamp.getTime() + 3 * 60 * 60 * 1000
-  );
-
-  // Format the date as 'YYYY-MM-DD HH:mm:ss'
-  const formattedTimestamp = adjustedDate
-    .toISOString()
-    .slice(0, 19)
-    .replace("T", " ");
 
   if (!userid || !title || !description) {
     return res
@@ -25,113 +13,180 @@ async function postQuestion(req, res) {
   }
 
   try {
+    const questionUuid = uuidv4(); // ✅ Generate UUID
+
     await dbConnection.query(
-      "insert into questions (userid, title, description, createdAt) values ( ?, ?, ?, ?)",
-      [userid, title, description, formattedTimestamp]
+      "INSERT INTO questions (userid, title, description, question_uuid) VALUES (?, ?, ?, ?)",
+      [userid, title, description, questionUuid]
     );
-    return res
-      .status(StatusCodes.CREATED)
-      .json({ message: "✅ Question posted successfully" });
+
+    return res.status(StatusCodes.CREATED).json({
+      message: "✅ Question posted successfully",
+      questionUuid: questionUuid, // ✅ Return UUID to frontend
+    });
   } catch (err) {
-    console.log(err);
-    return res.status(500).json({
-      message: "something went wrong, please try again later: " + err.message,
+    console.error("❌ Error posting question:", err);
+    return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
+      message: "Something went wrong, please try again later: " + err.message,
     });
   }
 }
 
-// get all questions
+// ✅ Get all questions - UPDATED to include UUID
 async function getAllQuestions(req, res) {
   try {
-    const [questions] =
-      await dbConnection.query(`select q.questionid, q.title, q.description,q.createdAt, u.username from questions q   
-     inner join users u on q.userid = u.userid  order by q.createdAt desc`);
-    return res.status(StatusCodes.OK).json({
-      message: questions,
-    });
+    const [questions] = await dbConnection.query(`
+      SELECT 
+        q.questionid, 
+        q.question_uuid,  -- ✅ ADD UUID
+        q.title, 
+        q.description, 
+        q.createdAt, 
+        q.views, 
+        q.answer_count,
+        q.userid,
+        u.username 
+      FROM questions q
+      INNER JOIN users u ON q.userid = u.userid
+      ORDER BY q.createdAt DESC
+    `);
+
+    return res.status(StatusCodes.OK).json({ message: questions });
   } catch (err) {
-    console.log(err);
-    return res
-      .status(StatusCodes.INTERNAL_SERVER_ERROR)
-      .json({ message: "something went wrong, please try again later" });
+    console.error("❌ Error fetching questions:", err);
+    return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
+      message: "Something went wrong, please try again later",
+    });
   }
 }
 
-// get single question and answers
+// ✅ Get single question and all its answers - UPDATED to use UUID
 async function getQuestionAndAnswer(req, res) {
-  const questionid = req.params.questionId;
+  const questionUuid = req.params.questionUuid; // ✅ Changed from questionId to questionUuid
 
   try {
+    // Increase view count using UUID
+    await dbConnection.query(
+      "UPDATE questions SET views = views + 1 WHERE question_uuid = ?",
+      [questionUuid]
+    );
+
+    // Fetch question and answers using UUID
     const [rows] = await dbConnection.query(
       `SELECT 
           q.questionid, 
+          q.question_uuid,  -- ✅ ADD UUID
           q.title, 
           q.description, 
+          q.views, 
+          q.answer_count,
           q.createdAt AS question_createdAt,
-          u2.username as question_username,
+          u2.username AS question_username,
+          u2.userid AS question_userid,
           a.answerid, 
           a.userid AS answer_userid, 
-          a.answer,
-          a.createdAt,
-          u.username as answer_username
-       FROM 
-          questions q   
-       LEFT JOIN 
-          answers a ON q.questionid = a.questionid
-          LEFT JOIN users u on u.userid = a.userid
-          left join users u2 on u2.userid = q.userid
-       WHERE 
-          q.questionid = ?
-          order by a.createdAt desc
-          `,
-      [questionid]
+          a.answer, 
+          a.createdAt AS answer_createdAt,
+          u.username AS answer_username,
+          a.comment_count
+        FROM questions q
+        LEFT JOIN answers a ON q.questionid = a.questionid
+        LEFT JOIN users u ON u.userid = a.userid
+        LEFT JOIN users u2 ON u2.userid = q.userid
+        WHERE q.question_uuid = ?  -- ✅ Changed to use UUID
+        ORDER BY a.createdAt DESC`,
+      [questionUuid]
     );
 
-    // Check if the question exists
     if (rows.length === 0) {
       return res
         .status(StatusCodes.NOT_FOUND)
-        .json({ message: "Question not found" });
+        .json({ message: "❌ Question not found" });
     }
 
+    // Structure question + answers
     const questionDetails = {
-      id: rows[0].questionid,
+      id: rows[0].question_uuid, // ✅ Return UUID as ID for frontend
+      questionid: rows[0].questionid, // ✅ Keep internal ID if needed
       title: rows[0].title,
       description: rows[0].description,
-      qtn_createdAt: rows[0].question_createdAt,
-      qtn_username: rows[0].question_username,
-
+      views: rows[0].views,
+      answer_count: rows[0].answer_count,
+      createdAt: rows[0].question_createdAt,
+      username: rows[0].question_username,
+      userid: rows[0].question_userid,
       answers: rows
-        .map((answer) => ({
-          answerid: answer.answerid,
-          userid: answer.answer_userid,
-          username: answer.answer_username,
-          answer: answer.answer,
-          createdAt: answer.createdAt,
-        }))
-        .filter((answer) => answer.answerid !== null), // Filter out any null answers
+        .filter((a) => a.answerid !== null)
+        .map((a) => ({
+          answerid: a.answerid,
+          userid: a.answer_userid,
+          username: a.answer_username,
+          answer: a.answer,
+          createdAt: a.answer_createdAt,
+          comment_count: a.comment_count ?? 0,
+        })),
     };
 
-    res.status(StatusCodes.OK).json(questionDetails);
+    return res.status(StatusCodes.OK).json(questionDetails);
   } catch (error) {
-    console.error(error);
-    res
-      .status(500)
-      .json({ message: "Error fetching question details: " + error.message });
+    console.error("❌ Error fetching question:", error);
+    return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
+      message: "Error fetching question details: " + error.message,
+    });
   }
 }
-module.exports = { postQuestion, getAllQuestions, getQuestionAndAnswer };
 
+// ✅ UPDATE/EDIT QUESTION - UPDATED to use UUID
+async function updateQuestion(req, res) {
+  const questionUuid = req.params.questionUuid; // ✅ Changed to UUID
+  const { title, description } = req.body;
+  const userid = req.user.userid;
 
+  if (!title || !description) {
+    return res.status(StatusCodes.BAD_REQUEST).json({
+      message: "Title and description are required",
+    });
+  }
 
+  try {
+    // Check if question exists and user owns it using UUID
+    const [question] = await dbConnection.query(
+      "SELECT userid FROM questions WHERE question_uuid = ?",
+      [questionUuid]
+    );
 
+    if (question.length === 0) {
+      return res.status(StatusCodes.NOT_FOUND).json({
+        message: "Question not found",
+      });
+    }
 
+    if (question[0].userid !== userid) {
+      return res.status(StatusCodes.FORBIDDEN).json({
+        message: "You can only edit your own questions",
+      });
+    }
 
+    // Update the question using UUID
+    await dbConnection.query(
+      "UPDATE questions SET title = ?, description = ? WHERE question_uuid = ?",
+      [title, description, questionUuid]
+    );
 
+    return res.status(StatusCodes.OK).json({
+      message: "✅ Question updated successfully",
+    });
+  } catch (error) {
+    console.error("❌ Error updating question:", error);
+    return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
+      message: "Something went wrong, please try again later",
+    });
+  }
+}
 
-
-
-
-
-
-
+module.exports = {
+  postQuestion,
+  getAllQuestions,
+  getQuestionAndAnswer,
+  updateQuestion,
+};

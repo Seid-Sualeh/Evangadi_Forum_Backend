@@ -19,28 +19,35 @@ router.post("/suggest-answer", async (req, res) => {
     const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
 
     // ✅ Better prompt for comprehensive & structured answer
-  
-    const prompt = `
-  You are an expert AI assistant. Answer the following question clearly and concisely.
+ const prompt = `
+You are an expert AI assistant. Answer the following question clearly and concisely.
 
-  ---
-  Question: ${question}
-  Description: ${description || "N/A"}
-  ---
+---
+Question: ${question}
+Description: ${description || "N/A"}
+---
 
-  Reply with these sections:
+Reply with these sections:
 
-  1️⃣ Main Answer: 2-4 short, clear sentences.
-  2️⃣ Recommended Books: 1-2 top books (with authors).
-  3️⃣ Recommended Videos: 1-2 YouTube channels or videos (with emojis).
-  4️⃣ Recommended Websites: 2-3 reliable sites.
+1️⃣ Definition:
+2-4 short, clear sentences.
 
-  Format:
-  - Bold headings for each section
-  - Bullet points for lists
-  - Emojis for appeal
-  - Keep it brief and focused
-  `;
+ 2️⃣ Recommended Books: 
+1-2 top books (with authors).
+
+3️⃣ Recommended Videos:
+1-2 YouTube channels or videos (with emojis 📺).
+
+4️⃣ Recommended Websites:
+2-3 reliable sites.
+
+ Format: 
+Use the bold headings and emojis exactly as shown above.
+Start each numbered section on a new line.
+Add a blank line (a gap) between each numbered section.
+List items under each heading on their own new lines (no bullet points or stars).
+Keep it brief and focused.
+`;
 
     // ✅ Generate AI content
     const result = await model.generateContent(prompt);

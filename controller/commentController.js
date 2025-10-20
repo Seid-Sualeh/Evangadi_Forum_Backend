@@ -1,0 +1,63 @@
+const db = require("../config/dbConfig");
+const { StatusCodes } = require("http-status-codes");
+
+// ✅ Add a comment
+exports.addComment = async (req, res) => {
+  const { answerid, userid, comment } = req.body;
+
+  if (!answerid || !userid || !comment) {
+    return res
+      .status(StatusCodes.BAD_REQUEST)
+      .json({ message: "All fields are required" });
+  }
+
+  try {
+    // ✅ 1. Insert the comment
+    await db.query(
+      "INSERT INTO comments (answerid, userid, comment) VALUES (?, ?, ?)",
+      [answerid, userid, comment]
+    );
+
+    // ✅ 2. Increase the comment_count in the related answer
+    await db.query(
+      "UPDATE answers SET comment_count = COALESCE(comment_count, 0) + 1 WHERE answerid = ?",
+      [answerid]
+    );
+
+    console.log(`✅ Comment count increased for answerid: ${answerid}`);
+    res
+      .status(StatusCodes.CREATED)
+      .json({ message: "✅ Comment added successfully" });
+  } catch (err) {
+    console.error("❌ Error adding comment:", err);
+    res
+      .status(StatusCodes.INTERNAL_SERVER_ERROR)
+      .json({ message: "Server error" });
+  }
+};
+
+// ✅ Get comments for an answer
+exports.getCommentsByAnswer = async (req, res) => {
+  const { answerid } = req.params;
+  try {
+    const [rows] = await db.query(
+      `SELECT 
+         c.commentid, 
+         c.comment, 
+         c.createdAt, 
+         u.username
+       FROM comments c
+       INNER JOIN users u ON c.userid = u.userid
+       WHERE c.answerid = ?
+       ORDER BY c.createdAt DESC`,
+      [answerid]
+    );
+
+    res.status(StatusCodes.OK).json(rows);
+  } catch (err) {
+    console.error("❌ Error fetching comments:", err);
+    res
+      .status(StatusCodes.INTERNAL_SERVER_ERROR)
+      .json({ message: "Server error" });
+  }
+};

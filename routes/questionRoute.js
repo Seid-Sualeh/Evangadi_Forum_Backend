@@ -2,45 +2,23 @@ const express = require("express");
 const router = express.Router();
 const authMiddleware = require("../middleware/authMiddleware");
 
-const { getAllQuestions, postQuestion ,getQuestionAndAnswer} = require("../controller/questionController");
+const {
+  getAllQuestions,
+  postQuestion,
+  getQuestionAndAnswer,
+  updateQuestion,
+} = require("../controller/questionController");
 
 // get all questions
 router.get("/question", getAllQuestions);
 
-
-
-
-// get single question
-router.get("/question/:questionId", getQuestionAndAnswer);
+// get single question - ✅ CHANGED to use UUID
+router.get("/question/:questionUuid", getQuestionAndAnswer);
 
 // post a question
 router.post("/question", authMiddleware, postQuestion);
 
+// ✅ UPDATE/EDIT Question - CHANGED to use UUID
+router.put("/question/:questionUuid", authMiddleware, updateQuestion);
+
 module.exports = router;
-
-// const express = require("express");
-// const router = express.Router();
-// const authMiddleware = require("../middleware/authMiddleware");
-// const {
-//   getAllQuestions,
-//   getQuestionAndAnswer,
-//   postQuestion,
-//   getQuestionByUuid,
-// } = require("../controller/questionController");
-
-// router.get("/questions", getAllQuestions);
-// router.get("/question/:questionId", getQuestionAndAnswer);
-// router.get("/question-uuid/:uuid", getQuestionByUuid);
-// router.post("/question", authMiddleware, postQuestion);
-
-
-
-
-
-
-// // GET question + answers by UUID
-// router.get("/question/:questionUuid", getQuestionAndAnswers);
-
-// module.exports = router;
-
-
