@@ -40,12 +40,40 @@ const supabase = createClient(
 );
 
 
-app.use(
-  cors({
-    origin: ["https://seidforum.netlify.app"], // add your frontend URL
-    credentials: true,
-  })
-);
+
+
+// CORS configuration - ADD YOUR NETLIFY DOMAIN
+const allowedOrigins = [
+  'https://seidforum.netlify.app', // Your Netlify domain
+  'http://localhost:3000',         // Local development
+  'http://localhost:3001'          // Alternative local port
+];
+
+app.use(cors({
+  origin: function (origin, callback) {
+    // Allow requests with no origin (like mobile apps or curl requests)
+    if (!origin) return callback(null, true);
+    
+    if (allowedOrigins.indexOf(origin) === -1) {
+      const msg = 'The CORS policy for this site does not allow access from the specified Origin.';
+      return callback(new Error(msg), false);
+    }
+    return callback(null, true);
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
+}));
+
+// Handle preflight requests
+app.options('*', cors());
+
+// Your routes here...
+app.get('/api/health', (req, res) => {
+  res.json({ message: 'CORS is configured properly!' });
+});
+
+// ... rest of your routes
 
 
 
