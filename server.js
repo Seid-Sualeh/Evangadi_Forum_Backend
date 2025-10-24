@@ -5,6 +5,18 @@ const cors = require("cors");
 const http = require("http");
 const { Server } = require("socket.io");
 
+
+
+
+
+
+
+
+
+
+
+
+
 // Initialize Express app
 const app = express();
 const port = process.env.PORT || 5000;
@@ -26,6 +38,16 @@ const supabase = createClient(
   process.env.SUPABASE_ANON_KEY ||
     "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imlxand5ZXJ4Y3hpYnZsZ3JybmNhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjEzMTk1MTAsImV4cCI6MjA3Njg5NTUxMH0.wIci350uOsJx6WnNLefGcYi8qm1VjpJfTsHBOHSbcsg"
 );
+
+
+app.use(
+  cors({
+    origin: ["https://seidforum.netlify.app"], // add your frontend URL
+    credentials: true,
+  })
+);
+
+
 
 // Test Supabase connection
 async function testSupabase() {
