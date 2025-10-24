@@ -1,7 +1,14 @@
-const db = require("../config/dbConfig");
+const { createClient } = require("@supabase/supabase-js");
 const { StatusCodes } = require("http-status-codes");
+require("dotenv").config();
 
-// ✅ Add a comment
+// Initialize Supabase
+const supabase = createClient(
+  process.env.SUPABASE_URL,
+  process.env.SUPABASE_KEY
+);
+
+// ======================== ADD COMMENT ========================
 exports.addComment = async (req, res) => {
   const { answerid, userid, comment } = req.body;
 
@@ -12,51 +19,49 @@ exports.addComment = async (req, res) => {
   }
 
   try {
-    // ✅ 1. Insert the comment
-    await db.query(
-      "INSERT INTO comments (answerid, userid, comment) VALUES (?, ?, ?)",
-      [answerid, userid, comment]
-    );
+    // 1️⃣ Insert the comment
+    const { error: insertError } = await supabase
+      .from("comments")
+      .insert([{ answerid, userid, comment }]);
 
-    // ✅ 2. Increase the comment_count in the related answer
-    await db.query(
-      "UPDATE answers SET comment_count = COALESCE(comment_count, 0) + 1 WHERE answerid = ?",
-      [answerid]
-    );
+    if (insertError) throw insertError;
 
-    console.log(`✅ Comment count increased for answerid: ${answerid}`);
-    res
+    // 2️⃣ Increase the comment_count in the related answer
+    const { error: updateError } = await supabase
+      .from("answers")
+      .update({ comment_count: supabase.raw("COALESCE(comment_count, 0) + 1") })
+      .eq("answerid", answerid);
+
+    if (updateError) throw updateError;
+
+    return res
       .status(StatusCodes.CREATED)
       .json({ message: "✅ Comment added successfully" });
   } catch (err) {
     console.error("❌ Error adding comment:", err);
-    res
+    return res
       .status(StatusCodes.INTERNAL_SERVER_ERROR)
       .json({ message: "Server error" });
   }
 };
 
-// ✅ Get comments for an answer
+// ======================== GET COMMENTS BY ANSWER ========================
 exports.getCommentsByAnswer = async (req, res) => {
   const { answerid } = req.params;
-  try {
-    const [rows] = await db.query(
-      `SELECT 
-         c.commentid, 
-         c.comment, 
-         c.createdAt, 
-         u.username
-       FROM comments c
-       INNER JOIN users u ON c.userid = u.userid
-       WHERE c.answerid = ?
-       ORDER BY c.createdAt DESC`,
-      [answerid]
-    );
 
-    res.status(StatusCodes.OK).json(rows);
+  try {
+    const { data: comments, error } = await supabase
+      .from("comments")
+      .select("commentid, comment, createdAt, users(username)")
+      .eq("answerid", answerid)
+      .order("createdAt", { ascending: false });
+
+    if (error) throw error;
+
+    return res.status(StatusCodes.OK).json(comments);
   } catch (err) {
     console.error("❌ Error fetching comments:", err);
-    res
+    return res
       .status(StatusCodes.INTERNAL_SERVER_ERROR)
       .json({ message: "Server error" });
   }

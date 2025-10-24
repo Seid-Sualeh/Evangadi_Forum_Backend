@@ -1,37 +1,28 @@
-const mysql2 = require("mysql2");
+// dbConfig.js
+const { Pool } = require("pg");
 const dotenv = require("dotenv");
 dotenv.config();
 
-// const dbConnection = mysql2.createPool({
-//   host: process.env.DB_HOST,
-//   user: process.env.DB_USER,
-//   password: process.env.DB_PASSWORD,
-//   database: process.env.DB_NAME,
-//   port: process.env.DB_PORT,
-//   JWT_SECRET: process.env.JWT_SECRET,
-//   GEMINI_API_KEY: process.env.GEMINI_API_KEY,
-//   DB_NAME: process.env.DB_NAME,
-//   DATABASE_URL: process.env.DATABASE_URL,
-//   connectionLimit:
-//     process.env.CONNECTION_LIMIT || process.env.DB_CONNECTION_LIMIT,
-// });
-// console.log("✅ Database connected successfully");
-// module.exports = dbConnection.promise();
-
-
-
-
-const dbConnection = mysql2.createPool({
-  host: process.env.DB_HOST,
-  user: process.env.DB_USER,
-  password: process.env.DB_PASS,
-  database: process.env.DB_DATABASE,
- 
- 
-  // port: process.env.PORT,
-  connectionLimit:
-    process.env.CONNECTION_LIMIT || process.env.DB_CONNECTION_LIMIT,
+// ✅ Correct connection configuration for Supabase
+const pool = new Pool({
+  user: process.env.DB_USER || "postgres",               // Supabase DB user
+  host: process.env.DB_HOST || "db.iqjwyerxcxibvlgrrnca.supabase.co", // Supabase host
+  database: process.env.DB_NAME || "postgres",          // Supabase database
+  password: process.env.DB_PASS || "",                  // Supabase password
+  port: process.env.DB_PORT || 5432,                   // default PostgreSQL port
+  ssl: {
+    rejectUnauthorized: false,                          // required for Supabase
+  },
 });
 
-// console.log("✅ Database connected successfully");
-module.exports = dbConnection.promise();
+// ✅ Test connection
+pool.connect((err, client, release) => {
+  if (err) {
+    console.error("❌ Error connecting to Supabase database:", err);
+    return;
+  }
+  console.log(" Connected to Supabase database!");
+  release();
+});
+
+module.exports = pool;

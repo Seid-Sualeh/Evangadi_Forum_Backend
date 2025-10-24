@@ -1,56 +1,67 @@
+// server.js
 require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
-const app = express();
 const http = require("http");
-// Corrected import using destructuring
 const { Server } = require("socket.io");
+
+// Initialize Express app
+const app = express();
 const port = process.env.PORT || 5000;
 
-// Middleware
-const authMiddleware = require("./middleware/authMiddleware");
-
-// Database connection
-const dbConnection = require("./config/dbConfig");
-
-// Routes
-const userRoutes = require("./routes/userRoutes");
-const questionRoutes = require("./routes/questionRoute");
-const answerRoutes = require("./routes/answerRoute");
-const aiRoutes = require("./routes/ai");
-
-const commentRoutes = require("./routes/commentRoutes");
-const likeRoutes = require("./routes/likeRoutes");
-
-// Middlewares
+// ----------------- Middleware -----------------
 app.use(
   cors({
-    origin: ["http://localhost:5173"],
+    origin: ["http://localhost:5173"], // frontend origin
     credentials: true,
   })
 );
 app.use(express.json());
 
-// Default route
-app.get("/", authMiddleware, (req, res) => {
-  res
-    .status(200)
-    .send("Welcome to Evangadi AI Forum Backend! You are authenticated.");
-});
+// ----------------- Supabase Client -----------------
+const { createClient } = require("@supabase/supabase-js");
 
-// Routes middleware
+const supabase = createClient(
+  process.env.SUPABASE_URL || "https://iqjwyerxcxibvlgrrnca.supabase.co",
+  process.env.SUPABASE_ANON_KEY ||
+    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imlxand5ZXJ4Y3hpYnZsZ3JybmNhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjEzMTk1MTAsImV4cCI6MjA3Njg5NTUxMH0.wIci350uOsJx6WnNLefGcYi8qm1VjpJfTsHBOHSbcsg"
+);
+
+// Test Supabase connection
+async function testSupabase() {
+  const { data, error } = await supabase.from("questions").select("*").limit(1);
+  if (error) {
+    console.error("❌ Supabase connection error:", error);
+  } else {
+    console.log("✅ Supabase connected successfully!");
+  }
+}
+testSupabase();
+
+// ----------------- Routes -----------------
+// Import routes
+const userRoutes = require("./routes/userRoutes");
+const questionRoutes = require("./routes/questionRoute");
+const answerRoutes = require("./routes/answerRoute");
+const aiRoutes = require("./routes/ai");
+const commentRoutes = require("./routes/commentRoutes");
+const likeRoutes = require("./routes/likeRoutes");
+
+// Mount routes
 app.use("/api/v1/user", userRoutes);
 app.use("/api/v1", questionRoutes);
 app.use("/api/v1", answerRoutes);
 app.use("/api/v1/ai", aiRoutes);
-
 app.use("/api/v1", commentRoutes);
 app.use("/api/v1", likeRoutes);
 
-// Create HTTP server and attach Express app
-const server = http.createServer(app);
+// Default route
+app.get("/", (req, res) => {
+  res.status(200).send("Welcome to Evangadi AI Forum Backend!");
+});
 
-// Create Socket.IO server and attach it to the HTTP server
+// ----------------- HTTP + Socket.IO -----------------
+const server = http.createServer(app);
 const io = new Server(server, {
   cors: {
     origin: ["http://localhost:5173"],
@@ -58,11 +69,11 @@ const io = new Server(server, {
   },
 });
 
-// ✅ Track connected users
+// Track online users
 let onlineUsers = new Set();
 
 io.on("connection", (socket) => {
-  // console.log("🔗 User connected:", socket.id);
+  console.log("🔗 User connected:", socket.id);
   onlineUsers.add(socket.id);
 
   io.emit("onlineUsers", onlineUsers.size);
@@ -75,18 +86,7 @@ io.on("connection", (socket) => {
   });
 });
 
-// Start server
-async function start() {
-  try {
-    await dbConnection.execute("SELECT 'test'");
-    console.log("✅ Database connected successfully");
-
-    server.listen(port, () => {
-      console.log(`🚀 Server running on port ${port}`);
-    });
-  } catch (err) {
-    console.error("❌ Database connection failed:", err.message);
-  }
-}
-
-start();
+// ----------------- Start Server -----------------
+server.listen(port, () => {
+  console.log(`🚀 Server running on port ${port}`);
+});

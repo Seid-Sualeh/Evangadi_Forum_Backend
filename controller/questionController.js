@@ -1,8 +1,15 @@
 const { StatusCodes } = require("http-status-codes");
-const dbConnection = require("../config/dbConfig");
-const { v4: uuidv4 } = require("uuid"); 
+const { createClient } = require("@supabase/supabase-js");
+const { v4: uuidv4 } = require("uuid");
+require("dotenv").config();
 
-// ✅ Post a new question WITH UUID
+// Initialize Supabase
+const supabase = createClient(
+  process.env.SUPABASE_URL,
+  process.env.SUPABASE_KEY
+);
+
+// ======================== POST A QUESTION ========================
 async function postQuestion(req, res) {
   const { userid, title, description } = req.body;
 
@@ -13,16 +20,17 @@ async function postQuestion(req, res) {
   }
 
   try {
-    const questionUuid = uuidv4(); // ✅ Generate UUID
+    const questionUuid = uuidv4();
 
-    await dbConnection.query(
-      "INSERT INTO questions (userid, title, description, question_uuid) VALUES (?, ?, ?, ?)",
-      [userid, title, description, questionUuid]
-    );
+    const { data, error } = await supabase
+      .from("questions")
+      .insert([{ userid, title, description, question_uuid: questionUuid }]);
+
+    if (error) throw error;
 
     return res.status(StatusCodes.CREATED).json({
       message: "✅ Question posted successfully",
-      questionUuid: questionUuid, // ✅ Return UUID to frontend
+      questionUuid,
     });
   } catch (err) {
     console.error("❌ Error posting question:", err);
@@ -32,24 +40,15 @@ async function postQuestion(req, res) {
   }
 }
 
-// ✅ Get all questions - UPDATED to include UUID
+// ======================== GET ALL QUESTIONS ========================
 async function getAllQuestions(req, res) {
   try {
-    const [questions] = await dbConnection.query(`
-      SELECT 
-        q.questionid, 
-        q.question_uuid,  -- ✅ ADD UUID
-        q.title, 
-        q.description, 
-        q.createdAt, 
-        q.views, 
-        q.answer_count,
-        q.userid,
-        u.username 
-      FROM questions q
-      INNER JOIN users u ON q.userid = u.userid
-      ORDER BY q.createdAt DESC
-    `);
+    const { data: questions, error } = await supabase
+      .from("questions")
+      .select("questionid, question_uuid, title, description, createdAt, views, answer_count, userid, users(username)")
+      .order("createdAt", { ascending: false });
+
+    if (error) throw error;
 
     return res.status(StatusCodes.OK).json({ message: questions });
   } catch (err) {
@@ -60,71 +59,69 @@ async function getAllQuestions(req, res) {
   }
 }
 
-// ✅ Get single question and all its answers - UPDATED to use UUID
+// ======================== GET SINGLE QUESTION AND ANSWERS ========================
 async function getQuestionAndAnswer(req, res) {
-  const questionUuid = req.params.questionUuid; // ✅ Changed from questionId to questionUuid
+  const questionUuid = req.params.questionUuid;
 
   try {
-    // Increase view count using UUID
-    await dbConnection.query(
-      "UPDATE questions SET views = views + 1 WHERE question_uuid = ?",
-      [questionUuid]
-    );
+    // Increase view count
+    const { error: viewError } = await supabase
+      .from("questions")
+      .update({ views: supabase.raw("views + 1") })
+      .eq("question_uuid", questionUuid);
 
-    // Fetch question and answers using UUID
-    const [rows] = await dbConnection.query(
-      `SELECT 
-          q.questionid, 
-          q.question_uuid,  -- ✅ ADD UUID
-          q.title, 
-          q.description, 
-          q.views, 
-          q.answer_count,
-          q.createdAt AS question_createdAt,
-          u2.username AS question_username,
-          u2.userid AS question_userid,
-          a.answerid, 
-          a.userid AS answer_userid, 
-          a.answer, 
-          a.createdAt AS answer_createdAt,
-          u.username AS answer_username,
-          a.comment_count
-        FROM questions q
-        LEFT JOIN answers a ON q.questionid = a.questionid
-        LEFT JOIN users u ON u.userid = a.userid
-        LEFT JOIN users u2 ON u2.userid = q.userid
-        WHERE q.question_uuid = ?  -- ✅ Changed to use UUID
-        ORDER BY a.createdAt DESC`,
-      [questionUuid]
-    );
+    if (viewError) throw viewError;
 
-    if (rows.length === 0) {
-      return res
-        .status(StatusCodes.NOT_FOUND)
-        .json({ message: "❌ Question not found" });
+    // Fetch question + answers + user info
+    const { data, error } = await supabase
+      .from("questions")
+      .select(`
+        questionid,
+        question_uuid,
+        title,
+        description,
+        views,
+        answer_count,
+        createdAt,
+        userid,
+        users!inner(username),
+        answers(
+          answerid,
+          userid,
+          answer,
+          createdAt,
+          comment_count,
+          users(username)
+        )
+      `)
+      .eq("question_uuid", questionUuid)
+      .single();
+
+    if (error) {
+      return res.status(StatusCodes.NOT_FOUND).json({ message: "❌ Question not found" });
     }
 
-    // Structure question + answers
+    // Format answers
+    const formattedAnswers = data.answers?.map((a) => ({
+      answerid: a.answerid,
+      userid: a.userid,
+      username: a.users.username,
+      answer: a.answer,
+      createdAt: a.createdAt,
+      comment_count: a.comment_count ?? 0,
+    })) || [];
+
     const questionDetails = {
-      id: rows[0].question_uuid, // ✅ Return UUID as ID for frontend
-      questionid: rows[0].questionid, // ✅ Keep internal ID if needed
-      title: rows[0].title,
-      description: rows[0].description,
-      views: rows[0].views,
-      answer_count: rows[0].answer_count,
-      createdAt: rows[0].question_createdAt,
-      username: rows[0].question_username,
-      userid: rows[0].question_userid,
-      answers: rows
-        .filter((a) => a.answerid !== null)
-        .map((a) => ({
-          answerid: a.answerid,
-          userid: a.answer_userid,
-          username: a.answer_username,
-          answer: a.answer,
-          createdAt: a.answer_createdAt,
-          comment_count: a.comment_count ?? 0,
-        })),
+      id: data.question_uuid,
+      questionid: data.questionid,
+      title: data.title,
+      description: data.description,
+      views: data.views,
+      answer_count: data.answer_count,
+      createdAt: data.createdAt,
+      username: data.users.username,
+      userid: data.userid,
+      answers: formattedAnswers,
     };
 
     return res.status(StatusCodes.OK).json(questionDetails);
@@ -136,9 +133,9 @@ async function getQuestionAndAnswer(req, res) {
   }
 }
 
-// ✅ UPDATE/EDIT QUESTION - UPDATED to use UUID
+// ======================== UPDATE QUESTION ========================
 async function updateQuestion(req, res) {
-  const questionUuid = req.params.questionUuid; // ✅ Changed to UUID
+  const questionUuid = req.params.questionUuid;
   const { title, description } = req.body;
   const userid = req.user.userid;
 
@@ -149,33 +146,25 @@ async function updateQuestion(req, res) {
   }
 
   try {
-    // Check if question exists and user owns it using UUID
-    const [question] = await dbConnection.query(
-      "SELECT userid FROM questions WHERE question_uuid = ?",
-      [questionUuid]
-    );
+    // Check if question exists and belongs to user
+    const { data: question, error } = await supabase
+      .from("questions")
+      .select("userid")
+      .eq("question_uuid", questionUuid)
+      .single();
 
-    if (question.length === 0) {
-      return res.status(StatusCodes.NOT_FOUND).json({
-        message: "Question not found",
-      });
-    }
+    if (error) return res.status(StatusCodes.NOT_FOUND).json({ message: "Question not found" });
+    if (question.userid !== userid) return res.status(StatusCodes.FORBIDDEN).json({ message: "You can only edit your own questions" });
 
-    if (question[0].userid !== userid) {
-      return res.status(StatusCodes.FORBIDDEN).json({
-        message: "You can only edit your own questions",
-      });
-    }
+    // Update
+    const { error: updateError } = await supabase
+      .from("questions")
+      .update({ title, description })
+      .eq("question_uuid", questionUuid);
 
-    // Update the question using UUID
-    await dbConnection.query(
-      "UPDATE questions SET title = ?, description = ? WHERE question_uuid = ?",
-      [title, description, questionUuid]
-    );
+    if (updateError) throw updateError;
 
-    return res.status(StatusCodes.OK).json({
-      message: "✅ Question updated successfully",
-    });
+    return res.status(StatusCodes.OK).json({ message: "✅ Question updated successfully" });
   } catch (error) {
     console.error("❌ Error updating question:", error);
     return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({

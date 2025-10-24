@@ -1,272 +1,266 @@
-const dbConnection = require("../config/dbConfig");
-const bcrypt = require("bcrypt");
 const { StatusCodes } = require("http-status-codes");
+const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
-const dotenv = require("dotenv");
 const crypto = require("crypto");
-const nodemailer = require("nodemailer");
-const { error } = require("console");
+const { createClient } = require("@supabase/supabase-js");
+require("dotenv").config();
 
+// Initialize Supabase
+const supabase = createClient(
+  process.env.SUPABASE_URL, // Make sure this exists in .env
+  process.env.SUPABASE_KEY
+);
 
+// Helper: Generate JWT
+function generateToken(user) {
+  return jwt.sign(
+    { userid: user.id, email: user.email },
+    process.env.JWT_SECRET,
+    { expiresIn: "7d" }
+  );
+}
 
-dotenv.config();
-
-// ======================== REGISTER ========================
+// ✅ Register
 async function register(req, res) {
-  const { username, firstname, lastname, email, password } = req.body;
+  const { username, email, password } = req.body;
 
-  const createdAt = new Date().toISOString().slice(0, 19).replace("T", " ");
- 
-
-  if (!username || !firstname || !lastname || !email || !password) {
+  if (!username || !email || !password)
     return res
       .status(StatusCodes.BAD_REQUEST)
-      .json({ Msg: "Please provide all required fields." });
-  }
-
-  if (password.length < 8) {
-    return res
-      .status(StatusCodes.BAD_REQUEST)
-      .json({ Msg: "Password should be at least 8 characters long." });
-  }
-
-  try {
-    const [user] = await dbConnection.query(
-      "SELECT username, userid FROM users WHERE username = ? OR email = ?",
-      [username, email]
-    );
-
-    if (user.length > 0) {
-      return res.status(StatusCodes.BAD_REQUEST).json({
-        Msg: "Username or Email already exists.",
-      });
-    }
-
-    const salt = await bcrypt.genSalt(10);
-    const hashedPassword = await bcrypt.hash(password, salt);
-
-    await dbConnection.query(
-      "INSERT INTO users (username, firstname, lastname, email, password, createdAt) VALUES (?, ?, ?, ?, ?, ?)",
-      [username, firstname, lastname, email, hashedPassword, createdAt]
-    );
-
-    return res
-      .status(StatusCodes.CREATED)
-      .json({ Msg: "You Registered Successfully." });
-  } catch (error) {
-    console.log(error);
-    return res
-      .status(StatusCodes.INTERNAL_SERVER_ERROR)
-      .json({ Msg: "Internal server error." });
-  }
-}
-
-// ======================== LOGIN ========================
-async function login(req, res) {
-  const { usernameOrEmail, password } = req.body;
-
-  if (!usernameOrEmail || !password) {
-    return res
-      .status(StatusCodes.BAD_REQUEST)
-      .json({ Msg: "Please provide username/email and password." });
-  }
-
-  try {
-    const [user] = await dbConnection.query(
-      "SELECT username, userid, password FROM users WHERE email = ? OR username = ?",
-      [usernameOrEmail, usernameOrEmail]
-    );
-
-    if (user.length === 0) {
-      return res
-        .status(StatusCodes.NOT_FOUND)
-        .json({ msg: "Please Signup first" });
-    }
-
-    const isMatch = await bcrypt.compare(password, user[0].password);
-    if (!isMatch) {
-      return res
-        .status(StatusCodes.BAD_REQUEST)
-        .json({ msg: "Please enter correct password" });
-    }
-
-    const username = user[0].username;
-    const userid = user[0].userid;
-    const token = jwt.sign({ username, userid }, process.env.JWT_SECRET, {
-      expiresIn: "30d",
-    });
-
-    // console.log("Generated Token:", token); // Logging the generated token
-
-    return res
-      .status(StatusCodes.OK)
-      .json({ msg: "User logged in successfully", token });
-  } catch (error) {
-    console.log(error);
-    return res
-      .status(StatusCodes.INTERNAL_SERVER_ERROR)
-      .json({ Msg: "Internal server error." });
-  }
-}
-
-// ======================== CHECK ========================
-function check(req, res) {
-  const username = req.user.username;
-  const userid = req.user.userid;
-
-  return res.status(StatusCodes.OK).json({ username, userid });
-}
-
-// ======================== FORGOT PASSWORD ========================
-
-async function forgotPassword(req, res) {
-  const { email } = req.body;
-
-  if (!email) return res.status(400).json({ msg: "Email is required" });
+      .json({ message: "All fields are required" });
 
   try {
     // Check if user exists
-    const [user] = await dbConnection.query(
-      "SELECT * FROM users WHERE email = ?",
-      [email]
-    );
-    if (!user.length)
-      return res.status(404).json({ msg: "No account found with this email" });
+    const { data: existingUser, error } = await supabase
+      .from("users")
+      .select("*")
+      .eq("email", email)
+      .single();
 
-    // Generate a unique token
-    const token = crypto.randomBytes(32).toString("hex");
-    const expires = Date.now() + 3600000; // 1 hour
+    if (existingUser) {
+      return res
+        .status(StatusCodes.CONFLICT)
+        .json({ message: "User already exists" });
+    }
 
-    // Store token and expiry in DB
-    await dbConnection.query(
-      "UPDATE users SET reset_token = ?, reset_expires = ? WHERE email = ?",
-      [token, expires, email]
-    );
+    // Hash password
+    const hashedPassword = await bcrypt.hash(password, 10);
 
-    // Nodemailer transporter
-    const transporter = nodemailer.createTransport({
-      service: "gmail",
-      auth: {
-        user: process.env.EMAIL_USER,
-        pass: process.env.EMAIL_PASS,
-      },
+    // Insert new user
+    const { data: newUser, error: insertError } = await supabase
+      .from("users")
+      .insert([{ username, email, password: hashedPassword }])
+      .select()
+      .single();
+
+    if (insertError) throw insertError;
+
+    const token = generateToken(newUser);
+
+    res.status(StatusCodes.CREATED).json({
+      message: "User registered successfully",
+      token,
+      user: { id: newUser.id, username, email },
     });
-
-    // Reset link
-    const resetURL = `http://localhost:5173/reset-password/${token}`;
-
-    // Send email
-    await transporter.sendMail({
-      from: `"Evangadi Forum" <${process.env.EMAIL_USER}>`,
-      to: email,
-      subject: "Password Reset Request",
-      html: `
-        <h3>Welcome!</h3>
-        <p>You requested a password reset. Click the button below:</p>
-        <a href="${resetURL}" style="background:#007bff;color:white;padding:10px 20px;text-decoration:none;border-radius:5px;">Reset Password</a>
-        <p>This link will expire in 1 hour.</p>
-      `,
+  } catch (err) {
+    console.error("❌ Register error:", err);
+    res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
+      message: "Server error",
+      error: err.message,
     });
-
-    res.status(200).json({ msg: "Password reset email sent successfully ✅" });
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ msg: "Server error. Please try again." });
   }
 }
 
-// ====================== Reset Password ======================
+// ✅ Login
+async function login(req, res) {
+  const { email, password } = req.body;
+
+  if (!email || !password)
+    return res
+      .status(StatusCodes.BAD_REQUEST)
+      .json({ message: "All fields are required" });
+
+  try {
+    const { data: user, error } = await supabase
+      .from("users")
+      .select("*")
+      .eq("email", email)
+      .single();
+
+    if (!user) {
+      return res
+        .status(StatusCodes.UNAUTHORIZED)
+        .json({ message: "Invalid credentials" });
+    }
+
+    const isMatch = await bcrypt.compare(password, user.password);
+    if (!isMatch)
+      return res
+        .status(StatusCodes.UNAUTHORIZED)
+        .json({ message: "Invalid credentials" });
+
+    const token = generateToken(user);
+
+    res.status(StatusCodes.OK).json({
+      message: "Login successful",
+      token,
+      user: { id: user.id, username: user.username, email: user.email },
+    });
+  } catch (err) {
+    console.error("❌ Login error:", err);
+    res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
+      message: "Server error",
+      error: err.message,
+    });
+  }
+}
+
+// ✅ Check authentication
+async function check(req, res) {
+  try {
+    res.status(StatusCodes.OK).json({
+      message: "Authenticated",
+      user: req.user, // comes from authMiddleware
+    });
+  } catch (err) {
+    console.error("❌ Check error:", err);
+    res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
+      message: "Server error",
+      error: err.message,
+    });
+  }
+}
+
+// ✅ Forgot password
+async function forgotPassword(req, res) {
+  const { email } = req.body;
+
+  if (!email)
+    return res
+      .status(StatusCodes.BAD_REQUEST)
+      .json({ message: "Email is required" });
+
+  try {
+    const { data: user } = await supabase
+      .from("users")
+      .select("*")
+      .eq("email", email)
+      .single();
+
+    if (!user)
+      return res
+        .status(StatusCodes.NOT_FOUND)
+        .json({ message: "User not found" });
+
+    const token = crypto.randomBytes(32).toString("hex");
+    const expires = new Date(Date.now() + 3600 * 1000); // 1 hour
+
+    await supabase
+      .from("password_resets")
+      .insert([{ userid: user.id, token, expires }]);
+
+    // TODO: Send email with reset link containing token
+
+    res.status(StatusCodes.OK).json({
+      message: "Password reset token created. Check your email.",
+      token, // for testing only; remove in production
+    });
+  } catch (err) {
+    console.error("❌ Forgot password error:", err);
+    res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
+      message: "Server error",
+      error: err.message,
+    });
+  }
+}
+
+// ✅ Reset password
 async function resetPassword(req, res) {
   const { token } = req.params;
   const { password } = req.body;
 
-  if (!password) return res.status(400).json({ msg: "Password is required" });
+  if (!token || !password)
+    return res
+      .status(StatusCodes.BAD_REQUEST)
+      .json({ message: "Token and password are required" });
 
   try {
-    const [user] = await dbConnection.query(
-      "SELECT * FROM users WHERE reset_token = ?",
-      [token]
-    );
-    if (!user.length)
-      return res.status(400).json({ msg: "Invalid or expired token" });
+    const { data: reset } = await supabase
+      .from("password_resets")
+      .select("*")
+      .eq("token", token)
+      .single();
 
-    const validUser = user[0];
+    if (!reset || new Date(reset.expires) < new Date())
+      return res
+        .status(StatusCodes.BAD_REQUEST)
+        .json({ message: "Token invalid or expired" });
 
-    if (Date.now() > validUser.reset_expires)
-      return res.status(400).json({ msg: "Token expired" });
-
-    // Hash new password
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    // Update DB
-    await dbConnection.query(
-      "UPDATE users SET password = ?, reset_token = NULL, reset_expires = NULL WHERE id = ?",
-      [hashedPassword, validUser.id]
-    );
+    await supabase
+      .from("users")
+      .update({ password: hashedPassword })
+      .eq("id", reset.userid);
 
-    res.status(200).json({ msg: "Password reset successful ✅" });
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ msg: "Server error. Please try again." });
+    await supabase.from("password_resets").delete().eq("token", token);
+
+    res.status(StatusCodes.OK).json({ message: "Password reset successful" });
+  } catch (err) {
+    console.error("❌ Reset password error:", err);
+    res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
+      message: "Server error",
+      error: err.message,
+    });
   }
 }
 
-// ======================== GOOGLE LOGIN ========================
+// ✅ Google login (simplified)
+async function googleLogin(req, res) {
+  const { email, username } = req.body;
 
-const googleLogin = async (req, res) => {
-  const { email, username, googleId } = req.body;
+  if (!email || !username)
+    return res
+      .status(StatusCodes.BAD_REQUEST)
+      .json({ message: "Email and username required" });
 
   try {
-    // Check if user already exists
-    const [user] = await dbConnection.query(
-      "SELECT * FROM users WHERE email = ?",
-      [email]
-    );
+    let { data: user } = await supabase
+      .from("users")
+      .select("*")
+      .eq("email", email)
+      .single();
 
-    if (user.length > 0) {
-      // Generate JWT token
-      const token = jwt.sign(
-        { userid: user[0].userid },
-        process.env.JWT_SECRET,
-        {
-          expiresIn: "30d",
-        }
-      );
-      return res.status(200).json({ message: "Login successful", token });
+    if (!user) {
+      const { data: newUser } = await supabase
+        .from("users")
+        .insert([{ email, username }])
+        .select()
+        .single();
+      user = newUser;
     }
 
-  
-    await dbConnection.query(
-      `INSERT INTO users (username, email, google_id, firstname, lastname, password)
-       VALUES (?, ?, ?, NULL, NULL, NULL)`,
-      [username, email, googleId]
-    );
+    const token = generateToken(user);
 
-    const [newUser] = await dbConnection.query(
-      "SELECT * FROM users WHERE email = ?",
-      [email]
-    );
-
-    const token = jwt.sign(
-      { userid: newUser[0].userid },
-      process.env.JWT_SECRET,
-      {
-        expiresIn: "30d",
-      }
-    );
-
-    res.status(201).json({ message: "User created and logged in", token });
+    res.status(StatusCodes.OK).json({
+      message: "Google login successful",
+      token,
+      user: { id: user.id, username: user.username, email: user.email },
+    });
   } catch (err) {
-    console.error("❌ Google Login Error:", err);
-    res.status(500).json({ message: "Internal server error" });
+    console.error("❌ Google login error:", err);
+    res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
+      message: "Server error",
+      error: err.message,
+    });
   }
-};
+}
 
 module.exports = {
   register,
   login,
   check,
   forgotPassword,
-  googleLogin,
   resetPassword,
+  googleLogin,
 };
