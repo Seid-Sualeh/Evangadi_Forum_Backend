@@ -41,29 +41,36 @@ const supabase = createClient(
 
 
 
-
-// CORS configuration - ADD YOUR NETLIFY DOMAIN
-const allowedOrigins = [
-  'https://seidforum.netlify.app', // Your Netlify domain
-  'http://localhost:3000',         // Local development
-  'http://localhost:3001'          // Alternative local port
+// ----------------- CORS Configuration -----------------
+// allow the Netlify frontend and localhost during testing
+const ALLOWED_ORIGINS = [
+  "https://seidforum.netlify.app",   // production frontend
+  "http://localhost:5173",
+  "http://localhost:5000/api/v1"      // local dev (Vite)
 ];
 
+app.use(express.json());
+
+// CORS configuration
 app.use(cors({
-  origin: function (origin, callback) {
-    // Allow requests with no origin (like mobile apps or curl requests)
+  origin: function(origin, callback){
+    // allow requests with no origin (like mobile apps or curl)
     if (!origin) return callback(null, true);
-    
-    if (allowedOrigins.indexOf(origin) === -1) {
-      const msg = 'The CORS policy for this site does not allow access from the specified Origin.';
+    if (ALLOWED_ORIGINS.indexOf(origin) === -1) {
+      const msg = `The CORS policy for this site does not allow access from the specified Origin: ${origin}`;
       return callback(new Error(msg), false);
     }
     return callback(null, true);
   },
-  credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
+  credentials: true,                // allow cookies/auth if needed
+  methods: ["GET","POST","PUT","PATCH","DELETE","OPTIONS"],
+  allowedHeaders: ["Content-Type","Authorization","Accept","X-Requested-With"]
 }));
+
+// Make sure preflight requests are handled
+app.options("*", (req, res) => {
+  res.sendStatus(204);
+});
 
 // Handle preflight requests
 app.options('*', cors());
