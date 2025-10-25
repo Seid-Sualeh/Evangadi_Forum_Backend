@@ -4,7 +4,7 @@ const express = require("express");
 const cors = require("cors");
 const http = require("http");
 const { Server } = require("socket.io");
-const { supabase } = require("./config/supabaseClient");
+const { supabase } = require("./config/dbConfig");
 
 // Initialize express app
 const app = express();
