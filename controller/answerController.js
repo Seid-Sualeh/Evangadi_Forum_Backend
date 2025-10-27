@@ -1,12 +1,5 @@
-const { createClient } = require("@supabase/supabase-js");
 const { StatusCodes } = require("http-status-codes");
-require("dotenv").config();
-
-// Initialize Supabase
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_KEY
-);
+const pool = require("../config/dbConfig"); // Neon DB connection
 
 // ======================== GET ALL ANSWERS ========================
 exports.getAnswer = async (req, res) => {
@@ -14,36 +7,31 @@ exports.getAnswer = async (req, res) => {
 
   try {
     // Convert UUID to numeric question ID
-    const { data: question, error: qError } = await supabase
-      .from("questions")
-      .select("questionid")
-      .eq("question_uuid", questionUuid)
-      .single();
+    const { rows: questionRows } = await pool.query(
+      "SELECT questionid FROM questions WHERE question_uuid = $1",
+      [questionUuid]
+    );
 
-    if (qError || !question) {
-      return res.status(StatusCodes.NOT_FOUND).json({
-        message: "Question not found",
-      });
-    }
+    if (questionRows.length === 0)
+      return res
+        .status(StatusCodes.NOT_FOUND)
+        .json({ message: "Question not found" });
 
-    const { data: answers, error } = await supabase
-      .from("answers")
-      .select(
-        `answerid, userid AS answer_userid, answer, createdAt, users(username),
-         comments(commentid)` // count of comments
-      )
-      .eq("questionid", question.questionid)
-      .order("createdAt", { ascending: false });
+    const questionid = questionRows[0].questionid;
 
-    if (error) throw error;
+    // Fetch answers with user info
+    const { rows: answers } = await pool.query(
+      `SELECT a.answerid, a.userid AS answer_userid, a.answer, a.created_at,
+              u.username,
+              (SELECT COUNT(*) FROM comments c WHERE c.answerid = a.answerid) AS comment_count
+       FROM answers a
+       JOIN users u ON a.userid = u.userid
+       WHERE a.questionid = $1
+       ORDER BY a.created_at DESC`,
+      [questionid]
+    );
 
-    // Include comment counts
-    const formattedAnswers = answers.map((a) => ({
-      ...a,
-      comment_count: a.comments ? a.comments.length : 0,
-    }));
-
-    return res.status(StatusCodes.OK).json({ rows: formattedAnswers });
+    return res.status(StatusCodes.OK).json({ rows: answers });
   } catch (err) {
     console.error("❌ Error fetching answers:", err);
     return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
@@ -67,35 +55,30 @@ exports.postAnswer = async (req, res) => {
     let numericQuestionId = questionid;
 
     if (typeof questionid === "string" && questionid.includes("-")) {
-      const { data: question, error: qError } = await supabase
-        .from("questions")
-        .select("questionid")
-        .eq("question_uuid", questionid)
-        .single();
+      const { rows: questionRows } = await pool.query(
+        "SELECT questionid FROM questions WHERE question_uuid = $1",
+        [questionid]
+      );
 
-      if (qError || !question) {
-        return res.status(StatusCodes.NOT_FOUND).json({
-          message: "Question not found",
-        });
-      }
+      if (questionRows.length === 0)
+        return res
+          .status(StatusCodes.NOT_FOUND)
+          .json({ message: "Question not found" });
 
-      numericQuestionId = question.questionid;
+      numericQuestionId = questionRows[0].questionid;
     }
 
     // Insert answer
-    const { error: insertError } = await supabase
-      .from("answers")
-      .insert([{ userid, questionid: numericQuestionId, answer }]);
-
-    if (insertError) throw insertError;
+    await pool.query(
+      "INSERT INTO answers(userid, questionid, answer, created_at) VALUES($1,$2,$3,NOW())",
+      [userid, numericQuestionId, answer]
+    );
 
     // Increment answer_count on question
-    const { error: updateError } = await supabase
-      .from("questions")
-      .update({ answer_count: supabase.raw("COALESCE(answer_count,0)+1") })
-      .eq("questionid", numericQuestionId);
-
-    if (updateError) throw updateError;
+    await pool.query(
+      "UPDATE questions SET answer_count = COALESCE(answer_count,0)+1 WHERE questionid=$1",
+      [numericQuestionId]
+    );
 
     return res
       .status(StatusCodes.CREATED)
@@ -115,40 +98,37 @@ exports.updateAnswer = async (req, res) => {
   const userid = req.user.userid;
 
   if (!answer) {
-    return res.status(StatusCodes.BAD_REQUEST).json({
-      message: "Answer text is required",
-    });
+    return res
+      .status(StatusCodes.BAD_REQUEST)
+      .json({ message: "Answer text is required" });
   }
 
   try {
-    const { data: existingAnswer, error } = await supabase
-      .from("answers")
-      .select("userid")
-      .eq("answerid", answerid)
-      .single();
+    const { rows: existingRows } = await pool.query(
+      "SELECT userid FROM answers WHERE answerid=$1",
+      [answerid]
+    );
 
-    if (error || !existingAnswer) {
-      return res.status(StatusCodes.NOT_FOUND).json({
-        message: "Answer not found",
-      });
-    }
+    if (existingRows.length === 0)
+      return res
+        .status(StatusCodes.NOT_FOUND)
+        .json({ message: "Answer not found" });
 
-    if (existingAnswer.userid !== userid) {
-      return res.status(StatusCodes.FORBIDDEN).json({
-        message: "You can only edit your own answers",
-      });
-    }
+    const existingAnswer = existingRows[0];
 
-    const { error: updateError } = await supabase
-      .from("answers")
-      .update({ answer })
-      .eq("answerid", answerid);
+    if (existingAnswer.userid !== userid)
+      return res
+        .status(StatusCodes.FORBIDDEN)
+        .json({ message: "You can only edit your own answers" });
 
-    if (updateError) throw updateError;
+    await pool.query(
+      "UPDATE answers SET answer=$1, updated_at=NOW() WHERE answerid=$2",
+      [answer, answerid]
+    );
 
-    return res.status(StatusCodes.OK).json({
-      message: "✅ Answer updated successfully",
-    });
+    return res
+      .status(StatusCodes.OK)
+      .json({ message: "✅ Answer updated successfully" });
   } catch (err) {
     console.error("❌ Error updating answer:", err);
     return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({

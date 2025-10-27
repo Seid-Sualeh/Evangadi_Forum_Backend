@@ -1,12 +1,5 @@
-const { createClient } = require("@supabase/supabase-js");
 const { StatusCodes } = require("http-status-codes");
-require("dotenv").config();
-
-// Initialize Supabase
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_KEY
-);
+const pool = require("../config/dbConfig"); // Neon DB connection
 
 // ======================== TOGGLE LIKE ========================
 exports.toggleLike = async (req, res) => {
@@ -20,33 +13,24 @@ exports.toggleLike = async (req, res) => {
 
   try {
     // Check if already liked
-    const { data: existing, error: selectError } = await supabase
-      .from("answer_likes")
-      .select("*")
-      .eq("answerid", answerid)
-      .eq("userid", userid);
-
-    if (selectError) throw selectError;
+    const { rows: existing } = await pool.query(
+      "SELECT * FROM answer_likes WHERE answerid=$1 AND userid=$2",
+      [answerid, userid]
+    );
 
     if (existing.length > 0) {
       // Unlike
-      const { error: deleteError } = await supabase
-        .from("answer_likes")
-        .delete()
-        .eq("answerid", answerid)
-        .eq("userid", userid);
-
-      if (deleteError) throw deleteError;
-
+      await pool.query(
+        "DELETE FROM answer_likes WHERE answerid=$1 AND userid=$2",
+        [answerid, userid]
+      );
       return res.status(StatusCodes.OK).json({ liked: false });
     } else {
       // Like
-      const { error: insertError } = await supabase
-        .from("answer_likes")
-        .insert([{ answerid, userid }]);
-
-      if (insertError) throw insertError;
-
+      await pool.query(
+        "INSERT INTO answer_likes(answerid, userid) VALUES($1,$2)",
+        [answerid, userid]
+      );
       return res.status(StatusCodes.OK).json({ liked: true });
     }
   } catch (err) {
@@ -62,14 +46,14 @@ exports.getLikesCount = async (req, res) => {
   const { answerid } = req.params;
 
   try {
-    const { count, error } = await supabase
-      .from("answer_likes")
-      .select("*", { count: "exact" })
-      .eq("answerid", answerid);
+    const { rows } = await pool.query(
+      "SELECT COUNT(*) AS like_count FROM answer_likes WHERE answerid=$1",
+      [answerid]
+    );
 
-    if (error) throw error;
+    const likeCount = parseInt(rows[0].like_count, 10) || 0;
 
-    return res.status(StatusCodes.OK).json({ likeCount: count });
+    return res.status(StatusCodes.OK).json({ likeCount });
   } catch (err) {
     console.error("❌ Error fetching likes:", err);
     return res

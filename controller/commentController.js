@@ -1,12 +1,5 @@
-const { createClient } = require("@supabase/supabase-js");
 const { StatusCodes } = require("http-status-codes");
-require("dotenv").config();
-
-// Initialize Supabase
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_KEY
-);
+const pool = require("../config/dbConfig"); // Neon DB connection
 
 // ======================== ADD COMMENT ========================
 exports.addComment = async (req, res) => {
@@ -20,19 +13,16 @@ exports.addComment = async (req, res) => {
 
   try {
     // 1️⃣ Insert the comment
-    const { error: insertError } = await supabase
-      .from("comments")
-      .insert([{ answerid, userid, comment }]);
-
-    if (insertError) throw insertError;
+    await pool.query(
+      "INSERT INTO comments(answerid, userid, comment) VALUES($1,$2,$3)",
+      [answerid, userid, comment]
+    );
 
     // 2️⃣ Increase the comment_count in the related answer
-    const { error: updateError } = await supabase
-      .from("answers")
-      .update({ comment_count: supabase.raw("COALESCE(comment_count, 0) + 1") })
-      .eq("answerid", answerid);
-
-    if (updateError) throw updateError;
+    await pool.query(
+      "UPDATE answers SET comment_count = COALESCE(comment_count,0)+1 WHERE answerid=$1",
+      [answerid]
+    );
 
     return res
       .status(StatusCodes.CREATED)
@@ -50,15 +40,16 @@ exports.getCommentsByAnswer = async (req, res) => {
   const { answerid } = req.params;
 
   try {
-    const { data: comments, error } = await supabase
-      .from("comments")
-      .select("commentid, comment, createdAt, users(username)")
-      .eq("answerid", answerid)
-      .order("createdAt", { ascending: false });
+    const { rows } = await pool.query(
+      `SELECT c.commentid, c.comment, c.created_at, u.username
+       FROM comments c
+       INNER JOIN users u ON c.userid = u.userid
+       WHERE c.answerid = $1
+       ORDER BY c.created_at DESC`,
+      [answerid]
+    );
 
-    if (error) throw error;
-
-    return res.status(StatusCodes.OK).json(comments);
+    return res.status(StatusCodes.OK).json(rows);
   } catch (err) {
     console.error("❌ Error fetching comments:", err);
     return res
