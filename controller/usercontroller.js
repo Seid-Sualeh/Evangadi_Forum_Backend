@@ -16,8 +16,9 @@ function generateToken(user) {
 
 // ======================== REGISTER ========================
 async function register(req, res) {
-  const { username, email, password } = req.body;
-  if (!username || !email || !password)
+ const { username, firstname, lastname, email, password } = req.body;
+
+  if (!username || !firstname || !lastname || !email || !password)
     return res
       .status(StatusCodes.BAD_REQUEST)
       .json({ message: "All fields are required" });
@@ -40,10 +41,11 @@ async function register(req, res) {
 
     // Insert new user
     const { rows } = await pool.query(
-      "INSERT INTO users (username, email, password) VALUES ($1, $2, $3)",
-      [username, email, hashedPassword]
+      "INSERT INTO users (userid, username, firstname, lastname, email, password) VALUES ($1, $2, $3, $4, $5, $6)",
+      [userid, username, firstname, lastname, email, hashedPassword]
     );
    
+
 
 
     const token = generateToken(rows[0]);
