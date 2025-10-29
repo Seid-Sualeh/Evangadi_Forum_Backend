@@ -1,3 +1,5 @@
+
+
 require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
@@ -11,34 +13,16 @@ const port = process.env.PORT || 5000;
 // Middleware
 const authMiddleware = require("./middleware/authMiddleware");
 const dbConnection = require("./config/dbConfig"); // MySQL pool
-
-// Routes
 const userRoutes = require("./routes/userRoutes");
 const questionRoutes = require("./routes/questionRoute");
 const answerRoutes = require("./routes/answerRoute");
+const aiRoutes = require("./routes/ai");
 const commentRoutes = require("./routes/commentRoutes");
 const likeRoutes = require("./routes/likeRoutes");
-const aiRoutes = require("./routes/ai");
 
-// Allowed origins (local + deployed frontend)
-const allowedOrigins = [
-  "http://localhost:5173",
-  "https://seidforum.vercel.app", // deployed frontend
-];
-
-// CORS middleware
 app.use(
   cors({
-    origin: function (origin, callback) {
-      // allow requests with no origin like Postman
-      if (!origin) return callback(null, true);
-      if (allowedOrigins.indexOf(origin) === -1) {
-        const msg =
-          "The CORS policy for this site does not allow access from the specified Origin.";
-        return callback(new Error(msg), false);
-      }
-      return callback(null, true);
-    },
+    origin: ["http://localhost:5173"],
     credentials: true,
   })
 );
@@ -60,15 +44,15 @@ app.get("/", authMiddleware, (req, res) => {
 app.use("/api/v1/user", userRoutes);
 app.use("/api/v1", questionRoutes);
 app.use("/api/v1", answerRoutes);
-app.use("/api/v1/comments", commentRoutes);
-app.use("/api/v1/likes", likeRoutes);
 app.use("/api/v1/ai", aiRoutes);
+app.use("/api/v1", commentRoutes);
+app.use("/api/v1", likeRoutes);
 
 // ======================== SOCKET.IO SETUP ========================
 const server = http.createServer(app);
 const io = new Server(server, {
   cors: {
-    origin: allowedOrigins,
+    origin: ["http://localhost:5173"],
     credentials: true,
   },
 });
@@ -86,82 +70,128 @@ io.on("connection", (socket) => {
 });
 
 // ======================== CREATE TABLES ========================
-async function createTables() {
-  try {
-    const sqlStatements = [
-      `CREATE TABLE IF NOT EXISTS users (
-        userid INT AUTO_INCREMENT PRIMARY KEY,
-        username VARCHAR(50) NOT NULL,
-        firstname VARCHAR(255) DEFAULT NULL,
-        lastname VARCHAR(255) DEFAULT NULL,
-        email VARCHAR(100) NOT NULL UNIQUE,
-        password VARCHAR(255) DEFAULT NULL,
-        createdAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        reset_token VARCHAR(255) DEFAULT NULL,
-        reset_expires BIGINT DEFAULT NULL,
-        google_id VARCHAR(255) DEFAULT NULL,
-        UNIQUE KEY uk_users_username (username)
-      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;`,
+// async function createTables() {
+//   try {
+//     const sql = `
+//     -- Users table
+//     CREATE TABLE IF NOT EXISTS users (
+//       userid INT AUTO_INCREMENT PRIMARY KEY,
+//       username VARCHAR(50) NOT NULL,
+//       firstname VARCHAR(255) DEFAULT NULL,
+//       lastname VARCHAR(255) DEFAULT NULL,
+//       email VARCHAR(100) NOT NULL UNIQUE,
+//       password VARCHAR(255) DEFAULT NULL,
+//       createdAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+//       reset_token VARCHAR(255) DEFAULT NULL,
+//       reset_expires BIGINT DEFAULT NULL,
+//       google_id VARCHAR(255) DEFAULT NULL,
+//       UNIQUE KEY uk_users_username (username)
+//     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
-      `CREATE TABLE IF NOT EXISTS questions (
-        questionid INT AUTO_INCREMENT PRIMARY KEY,
-        userid INT NOT NULL,
-        title VARCHAR(255) NOT NULL,
-        description TEXT NOT NULL,
-        createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
-        views INT DEFAULT 0,
-        answer_count INT DEFAULT 0,
-        question_uuid VARCHAR(36) NOT NULL UNIQUE,
-        FOREIGN KEY (userid) REFERENCES users(userid)
-          ON DELETE CASCADE ON UPDATE CASCADE
-      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;`,
+//     -- Questions table
+//     CREATE TABLE IF NOT EXISTS questions (
+//       questionid INT AUTO_INCREMENT PRIMARY KEY,
+//       userid INT NOT NULL,
+//       title VARCHAR(255) NOT NULL,
+//       description TEXT NOT NULL,
+//       createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
+//       views INT DEFAULT 0,
+//       answer_count INT DEFAULT 0,
+//       question_uuid VARCHAR(36) NOT NULL UNIQUE,
+//       FOREIGN KEY (userid) REFERENCES users(userid)
+//         ON DELETE CASCADE ON UPDATE CASCADE
+//     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
-      `CREATE TABLE IF NOT EXISTS answers (
-        answerid INT AUTO_INCREMENT PRIMARY KEY,
-        userid INT NOT NULL,
-        questionid INT NOT NULL,
-        answer TEXT NOT NULL,
-        createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
-        comment_count INT DEFAULT 0,
-        FOREIGN KEY (userid) REFERENCES users(userid)
-          ON DELETE CASCADE ON UPDATE CASCADE,
-        FOREIGN KEY (questionid) REFERENCES questions(questionid)
-          ON DELETE CASCADE ON UPDATE CASCADE
-      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;`,
+//     -- Answers table
+//     CREATE TABLE IF NOT EXISTS answers (
+//       answerid INT AUTO_INCREMENT PRIMARY KEY,
+//       userid INT NOT NULL,
+//       questionid INT NOT NULL,
+//       answer TEXT NOT NULL,
+//       createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
+//       comment_count INT DEFAULT 0,
+//       FOREIGN KEY (userid) REFERENCES users(userid)
+//         ON DELETE CASCADE ON UPDATE CASCADE,
+//       FOREIGN KEY (questionid) REFERENCES questions(questionid)
+//         ON DELETE CASCADE ON UPDATE CASCADE
+//     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
-      `CREATE TABLE IF NOT EXISTS comments (
-        commentid INT AUTO_INCREMENT PRIMARY KEY,
-        answerid INT NOT NULL,
-        userid INT NOT NULL,
-        comment TEXT NOT NULL,
-        createdAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (answerid) REFERENCES answers(answerid)
-          ON DELETE CASCADE ON UPDATE CASCADE,
-        FOREIGN KEY (userid) REFERENCES users(userid)
-          ON DELETE CASCADE ON UPDATE CASCADE
-      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;`,
+//     -- Answer Likes table
+//     CREATE TABLE IF NOT EXISTS answer_likes (
+//       likeid INT AUTO_INCREMENT PRIMARY KEY,
+//       answerid INT NOT NULL,
+//       userid INT NOT NULL,
+//       createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
+//       FOREIGN KEY (answerid) REFERENCES answers(answerid)
+//         ON DELETE CASCADE ON UPDATE CASCADE,
+//       FOREIGN KEY (userid) REFERENCES users(userid)
+//         ON DELETE CASCADE ON UPDATE CASCADE
+//     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+//     `;
 
-      `CREATE TABLE IF NOT EXISTS answer_likes (
-        likeid INT AUTO_INCREMENT PRIMARY KEY,
-        answerid INT NOT NULL,
-        userid INT NOT NULL,
-        createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (answerid) REFERENCES answers(answerid)
-          ON DELETE CASCADE ON UPDATE CASCADE,
-        FOREIGN KEY (userid) REFERENCES users(userid)
-          ON DELETE CASCADE ON UPDATE CASCADE
-      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;`,
-    ];
+//     await dbConnection.query(sql);
+//     console.log("✅ All tables created successfully");
+//   } catch (err) {
+//     console.error("❌ Error creating tables:", err.message);
+//   }
+// }
+const sqlStatements = [
+  `CREATE TABLE IF NOT EXISTS users (
+    userid INT AUTO_INCREMENT PRIMARY KEY,
+    username VARCHAR(50) NOT NULL,
+    firstname VARCHAR(255) DEFAULT NULL,
+    lastname VARCHAR(255) DEFAULT NULL,
+    email VARCHAR(100) NOT NULL UNIQUE,
+    password VARCHAR(255) DEFAULT NULL,
+    createdAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    reset_token VARCHAR(255) DEFAULT NULL,
+    reset_expires BIGINT DEFAULT NULL,
+    google_id VARCHAR(255) DEFAULT NULL,
+    UNIQUE KEY uk_users_username (username)
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;`,
 
-    for (const stmt of sqlStatements) {
-      await dbConnection.query(stmt);
-    }
+  `CREATE TABLE IF NOT EXISTS questions (
+    questionid INT AUTO_INCREMENT PRIMARY KEY,
+    userid INT NOT NULL,
+    title VARCHAR(255) NOT NULL,
+    description TEXT NOT NULL,
+    createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
+    views INT DEFAULT 0,
+    answer_count INT DEFAULT 0,
+    question_uuid VARCHAR(36) NOT NULL UNIQUE,
+    FOREIGN KEY (userid) REFERENCES users(userid)
+      ON DELETE CASCADE ON UPDATE CASCADE
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;`,
 
-    console.log("✅ All tables created successfully");
-  } catch (err) {
-    console.error("❌ Error creating tables:", err.message);
-  }
+  `CREATE TABLE IF NOT EXISTS answers (
+    answerid INT AUTO_INCREMENT PRIMARY KEY,
+    userid INT NOT NULL,
+    questionid INT NOT NULL,
+    answer TEXT NOT NULL,
+    createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
+    comment_count INT DEFAULT 0,
+    FOREIGN KEY (userid) REFERENCES users(userid)
+      ON DELETE CASCADE ON UPDATE CASCADE,
+    FOREIGN KEY (questionid) REFERENCES questions(questionid)
+      ON DELETE CASCADE ON UPDATE CASCADE
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;`,
+
+  `CREATE TABLE IF NOT EXISTS answer_likes (
+    likeid INT AUTO_INCREMENT PRIMARY KEY,
+    answerid INT NOT NULL,
+    userid INT NOT NULL,
+    createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (answerid) REFERENCES answers(answerid)
+      ON DELETE CASCADE ON UPDATE CASCADE,
+    FOREIGN KEY (userid) REFERENCES users(userid)
+      ON DELETE CASCADE ON UPDATE CASCADE
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;`,
+];
+
+for (const stmt of sqlStatements) {
+  await dbConnection.query(stmt);
 }
+console.log("✅ All tables created successfully");
 
 // ======================== START SERVER ========================
 async function start() {
@@ -169,6 +199,7 @@ async function start() {
     await dbConnection.query("SELECT 1"); // test connection
     console.log("✅ Database connected successfully");
 
+    // Create tables before starting the server
     await createTables();
 
     server.listen(port, () => {
