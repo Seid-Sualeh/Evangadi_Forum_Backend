@@ -169,8 +169,6 @@
 // };
 
 
-
-
 const { StatusCodes } = require("http-status-codes");
 const pool = require("../config/dbConfig"); // Aiven DB connection
 const { v4: uuidv4 } = require("uuid");
@@ -179,32 +177,41 @@ const { v4: uuidv4 } = require("uuid");
 async function postQuestion(req, res) {
   let { userid, title, description } = req.body;
 
+  // Validate input
   if (!userid || !title || !description) {
     return res
       .status(StatusCodes.BAD_REQUEST)
-      .json({ message: "All fields are required" });
+      .json({
+        message: "All fields are required (userid, title, description)",
+      });
   }
 
-  userid = parseInt(userid, 10); // Ensure userid is an integer
+  // Ensure userid is an integer
+  userid = parseInt(userid, 10);
+  if (isNaN(userid)) {
+    return res
+      .status(StatusCodes.BAD_REQUEST)
+      .json({ message: "Invalid userid format (must be an integer)" });
+  }
 
   try {
     const questionUuid = uuidv4();
     const createdAt = new Date();
 
     await pool.query(
-      `INSERT INTO questions(userid, title, description, question_uuid, createdAt, views, answer_count)
-       VALUES($1,$2,$3,$4,$5,0,0)`,
+      `INSERT INTO questions (userid, title, description, question_uuid, createdAt, views, answer_count)
+       VALUES ($1, $2, $3, $4, $5, 0, 0)`,
       [userid, title, description, questionUuid, createdAt]
     );
 
     return res.status(StatusCodes.CREATED).json({
-      message: "✅ Question posted successfully",
+      message: "✅ Question posted successfully!",
       questionUuid,
     });
   } catch (err) {
     console.error("❌ Error posting question:", err);
     return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
-      message: "Something went wrong: " + err.message,
+      message: "Server error while posting question: " + err.message,
     });
   }
 }
@@ -234,22 +241,24 @@ async function getAllQuestions(req, res) {
 
 // ======================== GET SINGLE QUESTION AND ANSWERS ========================
 async function getQuestionAndAnswer(req, res) {
-  const questionUuid = req.params.questionUuid;
+  const { questionUuid } = req.params;
 
   try {
-    // Get question
+    // Get the question
     const { rows: questionRows } = await pool.query(
-      `SELECT q.questionid, q.question_uuid, q.title, q.description, q.views, q.answer_count, q.userid, u.username
+      `SELECT q.questionid, q.question_uuid, q.title, q.description, q.views, q.answer_count, q.userid, q.createdAt, u.username
        FROM questions q
        JOIN users u ON q.userid = u.userid
        WHERE q.question_uuid = $1`,
       [questionUuid]
     );
+
     const question = questionRows[0];
-    if (!question)
+    if (!question) {
       return res
         .status(StatusCodes.NOT_FOUND)
         .json({ message: "❌ Question not found" });
+    }
 
     // Increment views and get updated value
     const { rows: updatedRows } = await pool.query(
@@ -258,9 +267,10 @@ async function getQuestionAndAnswer(req, res) {
        RETURNING views`,
       [questionUuid]
     );
+
     const updatedViews = updatedRows[0].views;
 
-    // Get answers
+    // Get related answers
     const { rows: answerRows } = await pool.query(
       `SELECT a.answerid, a.userid, a.answer, a.createdAt, a.comment_count, u.username
        FROM answers a
@@ -294,9 +304,11 @@ async function getQuestionAndAnswer(req, res) {
 
 // ======================== UPDATE QUESTION ========================
 async function updateQuestion(req, res) {
-  const questionUuid = req.params.questionUuid;
+  const { questionUuid } = req.params;
   const { title, description } = req.body;
-  const userid = parseInt(req.user.userid, 10); // ensure integer
+
+  // Get userid from auth (ensure it's integer)
+  const userid = parseInt(req.user?.userid, 10);
 
   if (!title || !description) {
     return res
@@ -304,25 +316,34 @@ async function updateQuestion(req, res) {
       .json({ message: "Title and description are required" });
   }
 
+  if (isNaN(userid)) {
+    return res
+      .status(StatusCodes.UNAUTHORIZED)
+      .json({ message: "Unauthorized: invalid user" });
+  }
+
   try {
-    // Check if question exists and belongs to user
+    // Check if question exists
     const { rows } = await pool.query(
       "SELECT userid FROM questions WHERE question_uuid = $1",
       [questionUuid]
     );
 
     const question = rows[0];
-    if (!question)
+    if (!question) {
       return res
         .status(StatusCodes.NOT_FOUND)
         .json({ message: "Question not found" });
+    }
 
-    if (question.userid !== userid)
+    // Ensure user owns the question
+    if (question.userid !== userid) {
       return res
         .status(StatusCodes.FORBIDDEN)
         .json({ message: "You can only edit your own questions" });
+    }
 
-    // Update
+    // Perform update
     await pool.query(
       "UPDATE questions SET title=$1, description=$2 WHERE question_uuid=$3",
       [title, description, questionUuid]
@@ -334,7 +355,7 @@ async function updateQuestion(req, res) {
   } catch (error) {
     console.error("❌ Error updating question:", error);
     return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
-      message: "Something went wrong: " + error.message,
+      message: "Server error while updating: " + error.message,
     });
   }
 }
