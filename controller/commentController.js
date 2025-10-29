@@ -41,11 +41,11 @@ exports.getCommentsByAnswer = async (req, res) => {
 
   try {
     const { rows } = await pool.query(
-      `SELECT c.commentid, c.comment, c.created_at, u.username
+      `SELECT c.commentid, c.comment, c.createdAt, u.username
        FROM comments c
        INNER JOIN users u ON c.userid = u.userid
        WHERE c.answerid = $1
-       ORDER BY c.created_at DESC`,
+       ORDER BY c.createdAt DESC`,
       [answerid]
     );
 

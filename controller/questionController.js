@@ -17,7 +17,7 @@ async function postQuestion(req, res) {
     const createdAt = new Date();
 
     await pool.query(
-      `INSERT INTO questions(userid, title, description, question_uuid, created_at, views, answer_count)
+      `INSERT INTO questions(userid, title, description, question_uuid, createdAt, views, answer_count)
        VALUES($1,$2,$3,$4,$5,0,0)`,
       [userid, title, description, questionUuid, createdAt]
     );
@@ -38,11 +38,11 @@ async function postQuestion(req, res) {
 async function getAllQuestions(req, res) {
   try {
     const { rows } = await pool.query(
-      `SELECT q.questionid, q.question_uuid, q.title, q.description, q.created_at, q.views, q.answer_count,
+      `SELECT q.questionid, q.question_uuid, q.title, q.description, q.createdAt, q.views, q.answer_count,
               u.userid, u.username
        FROM questions q
        JOIN users u ON q.userid = u.userid
-       ORDER BY q.created_at DESC`
+       ORDER BY q.createdAt DESC`
     );
 
     return res.status(StatusCodes.OK).json({
@@ -88,7 +88,7 @@ async function getQuestionAndAnswer(req, res) {
        FROM answers a
        JOIN users u ON a.userid = u.userid
        WHERE a.questionid = $1
-       ORDER BY a.created_at ASC`,
+       ORDER BY a.createdAt ASC`,
       [question.questionid]
     );
 
@@ -99,7 +99,7 @@ async function getQuestionAndAnswer(req, res) {
       description: question.description,
       views: question.views + 1, // because we incremented
       answer_count: question.answer_count,
-      created_at: question.created_at,
+      createdAt: question.createdAt,
       username: question.username,
       userid: question.userid,
       answers: answerRows,

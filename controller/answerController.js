@@ -21,13 +21,13 @@ exports.getAnswer = async (req, res) => {
 
     // Fetch answers with user info
     const { rows: answers } = await pool.query(
-      `SELECT a.answerid, a.userid AS answer_userid, a.answer, a.created_at,
+      `SELECT a.answerid, a.userid AS answer_userid, a.answer, a.createdAt,
               u.username,
               (SELECT COUNT(*) FROM comments c WHERE c.answerid = a.answerid) AS comment_count
        FROM answers a
        JOIN users u ON a.userid = u.userid
        WHERE a.questionid = $1
-       ORDER BY a.created_at DESC`,
+       ORDER BY a.createdAt DESC`,
       [questionid]
     );
 
@@ -70,7 +70,7 @@ exports.postAnswer = async (req, res) => {
 
     // Insert answer
     await pool.query(
-      "INSERT INTO answers(userid, questionid, answer, created_at) VALUES($1,$2,$3,NOW())",
+      "INSERT INTO answers(userid, questionid, answer, createdAt) VALUES($1,$2,$3,NOW())",
       [userid, numericQuestionId, answer]
     );
 
@@ -122,7 +122,7 @@ exports.updateAnswer = async (req, res) => {
         .json({ message: "You can only edit your own answers" });
 
     await pool.query(
-      "UPDATE answers SET answer=$1, updated_at=NOW() WHERE answerid=$2",
+      "UPDATE answers SET answer=$1, updatedAt=NOW() WHERE answerid=$2",
       [answer, answerid]
     );
 
