@@ -7,12 +7,20 @@ async function authMiddleware(req, res, next) {
   const authHeader = req.headers.authorization;
 
   // console.log("Authorization Header:", authHeader);
+console.log("JWT_SECRET (production):", process.env.JWT_SECRET);
 
   if (!authHeader || !authHeader.startsWith("Bearer ")) {
     return res
       .status(StatusCodes.UNAUTHORIZED)
       .json({ msg: "Authentication invalid" });
   }
+const secret = process.env.JWT_SECRET;
+if (!secret) {
+  console.error("❌ JWT_SECRET not set in environment!");
+  return res
+    .status(StatusCodes.INTERNAL_SERVER_ERROR)
+    .json({ msg: "Server misconfigured" });
+}
 
   try {
     // If the token format is 'Bearer <token>', extract the token
