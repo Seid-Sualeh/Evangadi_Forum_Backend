@@ -1,7 +1,8 @@
-const { Pool } = require("pg");
+// config/dbConfig.js
+const mysql = require("mysql2");
 require("dotenv").config();
 
-// Prefer Clever Cloud's MySQL addon env vars if present; otherwise fall back to local .env
+// Detect Clever Cloud environment
 const isCleverCloud =
   !!process.env.MYSQL_ADDON_URI || !!process.env.MYSQL_ADDON_HOST;
 
@@ -21,10 +22,8 @@ const connectionConfig = process.env.MYSQL_ADDON_URI
         process.env.DB_CONNECTION_LIMIT || process.env.CONNECTION_LIMIT || 10
       ),
       queueLimit: 0,
-      // Clever Cloud MySQL usually requires SSL
       ssl: isCleverCloud
         ? {
-            // Set to 'false' to skip CA verification if no CA bundle is provided
             rejectUnauthorized:
               (
                 process.env.DB_SSL_REJECT_UNAUTHORIZED || "false"
@@ -33,6 +32,8 @@ const connectionConfig = process.env.MYSQL_ADDON_URI
         : undefined,
     };
 
-const dbConnection = mysql2.createPool(connectionConfig);
+// Create MySQL pool
+const dbConnection = mysql.createPool(connectionConfig);
 
+// Export promise-based pool
 module.exports = dbConnection.promise();
