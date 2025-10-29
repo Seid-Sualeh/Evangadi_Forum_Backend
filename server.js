@@ -289,11 +289,10 @@ app.use(express.json());
 
 // ----------------- Aiven PostgreSQL Connection -----------------
 const pool = new Pool({
-  user: process.env.PG_USER || "avnadmin",
-  host:
-    process.env.PG_HOST || "evangadi-forum-db-evangadiforum1.c.aivencloud.com",
-  database: process.env.PG_DATABASE || "defaultdb",
-  password: process.env.PG_PASSWORD || "AVNS_II-GvUowO1dd5PkxzGo",
+  user: process.env.PG_USER ,
+  host: process.env.PG_HOST,
+  database: process.env.PG_DATABASE,
+  password: process.env.PG_PASSWORD,
   port: process.env.PG_PORT || 20105,
   ssl: { rejectUnauthorized: false },
   max: 20,
