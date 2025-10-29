@@ -1,5 +1,5 @@
 // config/dbConfig.js
-const mysql = require("mysql2");
+const mysql2 = require("mysql2");
 require("dotenv").config();
 
 // Detect Clever Cloud environment
@@ -10,13 +10,13 @@ const isCleverCloud =
 const connectionConfig = process.env.MYSQL_ADDON_URI
   ? process.env.MYSQL_ADDON_URI
   : {
-      host: process.env.MYSQL_ADDON_HOST || process.env.DB_HOST || "localhost",
+      host: process.env.MYSQL_ADDON_HOST || process.env.DB_HOST ,
       user: process.env.MYSQL_ADDON_USER || process.env.DB_USER,
       password:
-        process.env.MYSQL_ADDON_PASSWORD || process.env.DB_PASS || undefined,
+        process.env.MYSQL_ADDON_PASSWORD || process.env.DB_PASS ,
       database:
-        process.env.MYSQL_ADDON_DB || process.env.DB_DATABASE || undefined,
-      port: Number(process.env.MYSQL_ADDON_PORT || process.env.DB_PORT || 3306),
+        process.env.MYSQL_ADDON_DB || process.env.DB_DATABASE ,
+      port: Number(process.env.MYSQL_ADDON_PORT ),
       waitForConnections: true,
       connectionLimit: Number(
         process.env.DB_CONNECTION_LIMIT || process.env.CONNECTION_LIMIT || 10
@@ -33,7 +33,7 @@ const connectionConfig = process.env.MYSQL_ADDON_URI
     };
 
 // Create MySQL pool
-const dbConnection = mysql.createPool(connectionConfig);
+const dbConnection = mysql2.createPool(connectionConfig);
 
 // Export promise-based pool
 module.exports = dbConnection.promise();
