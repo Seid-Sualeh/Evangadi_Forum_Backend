@@ -70,7 +70,6 @@
 //   socket.on("disconnect", () => {
 //     console.log("❌ User disconnected:", socket.id);
 //     onlineUsers.delete(socket.id);
-
 //     io.emit("onlineUsers", onlineUsers.size);
 //   });
 // });
@@ -110,6 +109,7 @@ const answerRoutes = require("./routes/answerRoute");
 const aiRoutes = require("./routes/ai");
 const commentRoutes = require("./routes/commentRoutes");
 const likeRoutes = require("./routes/likeRoutes");
+const aiRoutes = require("./routes/ai");
 
 app.use(
   cors({
@@ -130,6 +130,8 @@ app.get("/", authMiddleware, (req, res) => {
 app.use("/api/v1/user", userRoutes);
 app.use("/api/v1", questionRoutes);
 app.use("/api/v1", answerRoutes);
+app.use("/api/v1/comments", commentRoutes);
+app.use("/api/v1/likes", likeRoutes);
 app.use("/api/v1/ai", aiRoutes);
 app.use("/api/v1", commentRoutes);
 app.use("/api/v1", likeRoutes);
@@ -137,14 +139,10 @@ app.use("/api/v1", likeRoutes);
 // ======================== SOCKET.IO SETUP ========================
 const server = http.createServer(app);
 const io = new Server(server, {
-  cors: {
-    origin: ["http://localhost:5173"],
-    credentials: true,
-  },
+  cors: { origin: allowedOrigins, credentials: true },
 });
 
 let onlineUsers = new Set();
-
 io.on("connection", (socket) => {
   onlineUsers.add(socket.id);
   io.emit("onlineUsers", onlineUsers.size);

@@ -1,38 +1,47 @@
 const { StatusCodes } = require("http-status-codes");
-const dbConnection = require("../config/dbConfig");
+const pool = require("../config/dbConfig"); // Neon DB connection
 
-// ✅ Get all answers for a question (with comment count)
-async function getAnswer(req, res) {
-  const questionid = req.params.question_id;
+// ======================== GET ALL ANSWERS ========================
+exports.getAnswer = async (req, res) => {
+  const questionUuid = req.params.question_id;
 
   try {
-    const [rows] = await dbConnection.query(
-      `SELECT 
-          a.answerid, 
-          a.userid AS answer_userid, 
-          a.answer,
-          a.createdAt,
-          u.username,
-          -- ✅ Count total comments per answer
-          (SELECT COUNT(*) FROM comments c WHERE c.answerid = a.answerid) AS comment_count
-        FROM answers a 
-        INNER JOIN users u ON a.userid = u.userid
-        WHERE a.questionid = ?
-        ORDER BY a.createdAt DESC`,
+    // Convert UUID to numeric question ID
+    const { rows: questionRows } = await pool.query(
+      "SELECT questionid FROM questions WHERE question_uuid = $1",
+      [questionUuid]
+    );
+
+    if (questionRows.length === 0)
+      return res
+        .status(StatusCodes.NOT_FOUND)
+        .json({ message: "Question not found" });
+
+    const questionid = questionRows[0].questionid;
+
+    // Fetch answers with user info
+    const { rows: answers } = await pool.query(
+      `SELECT a.answerid, a.userid AS answer_userid, a.answer, a.createdAt,
+              u.username,
+              (SELECT COUNT(*) FROM comments c WHERE c.answerid = a.answerid) AS comment_count
+       FROM answers a
+       JOIN users u ON a.userid = u.userid
+       WHERE a.questionid = $1
+       ORDER BY a.createdAt DESC`,
       [questionid]
     );
 
-    return res.status(StatusCodes.OK).json({ rows });
+    return res.status(StatusCodes.OK).json({ rows: answers });
   } catch (err) {
     console.error("❌ Error fetching answers:", err);
     return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
       message: "Something went wrong, please try again later",
     });
   }
-}
+};
 
-// ✅ Post a new answer - FIXED VERSION
-async function postAnswer(req, res) {
+// ======================== POST NEW ANSWER ========================
+exports.postAnswer = async (req, res) => {
   const { userid, answer, questionid } = req.body;
 
   if (!userid || !answer || !questionid) {
@@ -42,42 +51,35 @@ async function postAnswer(req, res) {
   }
 
   try {
-    let numericQuestionId;
+    // Convert UUID to numeric question ID if needed
+    let numericQuestionId = questionid;
 
-    // ✅ Check if questionid is a UUID (string with hyphens)
     if (typeof questionid === "string" && questionid.includes("-")) {
-      // Convert UUID to numeric question ID
-      const [question] = await dbConnection.query(
-        "SELECT questionid FROM questions WHERE question_uuid = ?",
+      const { rows: questionRows } = await pool.query(
+        "SELECT questionid FROM questions WHERE question_uuid = $1",
         [questionid]
       );
 
-      if (question.length === 0) {
-        console.log("❌ Question not found for UUID:", questionid);
-        return res.status(StatusCodes.NOT_FOUND).json({
-          message: "Question not found",
-        });
-      }
+      if (questionRows.length === 0)
+        return res
+          .status(StatusCodes.NOT_FOUND)
+          .json({ message: "Question not found" });
 
-      numericQuestionId = question[0].questionid;
-    } else {
-      // It's already a numeric ID
-      numericQuestionId = questionid;
+      numericQuestionId = questionRows[0].questionid;
     }
 
-    // ✅ Insert the answer using the CORRECT numeric question ID
-    await dbConnection.query(
-      "INSERT INTO answers (userid, questionid, answer) VALUES (?, ?, ?)",
+    // Insert answer
+    await pool.query(
+      "INSERT INTO answers(userid, questionid, answer, createdAt) VALUES($1,$2,$3,NOW())",
       [userid, numericQuestionId, answer]
     );
 
-    // ✅ Increase the question's answer_count using the CORRECT ID
-    await dbConnection.query(
-      "UPDATE questions SET answer_count = answer_count + 1 WHERE questionid = ?",
+    // Increment answer_count on question
+    await pool.query(
+      "UPDATE questions SET answer_count = COALESCE(answer_count,0)+1 WHERE questionid=$1",
       [numericQuestionId]
     );
 
-    // console.log("✅ Answer posted successfully");
     return res
       .status(StatusCodes.CREATED)
       .json({ message: "✅ Answer posted successfully" });
@@ -87,58 +89,50 @@ async function postAnswer(req, res) {
       message: "Something went wrong, please try again later: " + err.message,
     });
   }
-}
+};
 
-// ✅ UPDATE/EDIT ANSWER
-async function updateAnswer(req, res) {
+// ======================== UPDATE ANSWER ========================
+exports.updateAnswer = async (req, res) => {
   const { answerid } = req.params;
   const { answer } = req.body;
-  const userid = req.user.userid; // From auth middleware
+  const userid = req.user.userid;
 
   if (!answer) {
-    return res.status(StatusCodes.BAD_REQUEST).json({
-      message: "Answer text is required",
-    });
+    return res
+      .status(StatusCodes.BAD_REQUEST)
+      .json({ message: "Answer text is required" });
   }
 
   try {
-    // Check if answer exists and user owns it
-    const [answerRecord] = await dbConnection.query(
-      "SELECT userid, questionid FROM answers WHERE answerid = ?",
+    const { rows: existingRows } = await pool.query(
+      "SELECT userid FROM answers WHERE answerid=$1",
       [answerid]
     );
 
-    if (answerRecord.length === 0) {
-      return res.status(StatusCodes.NOT_FOUND).json({
-        message: "Answer not found",
-      });
-    }
+    if (existingRows.length === 0)
+      return res
+        .status(StatusCodes.NOT_FOUND)
+        .json({ message: "Answer not found" });
 
-    if (answerRecord[0].userid !== userid) {
-      return res.status(StatusCodes.FORBIDDEN).json({
-        message: "You can only edit your own answers",
-      });
-    }
+    const existingAnswer = existingRows[0];
 
-    // Update the answer
-    await dbConnection.query(
-      "UPDATE answers SET answer = ? WHERE answerid = ?",
+    if (existingAnswer.userid !== userid)
+      return res
+        .status(StatusCodes.FORBIDDEN)
+        .json({ message: "You can only edit your own answers" });
+
+    await pool.query(
+      "UPDATE answers SET answer=$1, updatedAt=NOW() WHERE answerid=$2",
       [answer, answerid]
     );
 
-    return res.status(StatusCodes.OK).json({
-      message: "✅ Answer updated successfully",
-    });
-  } catch (error) {
-    console.error("❌ Error updating answer:", error);
+    return res
+      .status(StatusCodes.OK)
+      .json({ message: "✅ Answer updated successfully" });
+  } catch (err) {
+    console.error("❌ Error updating answer:", err);
     return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
       message: "Something went wrong, please try again later",
     });
   }
-}
-
-module.exports = {
-  getAnswer,
-  postAnswer,
-  updateAnswer,
 };

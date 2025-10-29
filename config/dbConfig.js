@@ -1,6 +1,5 @@
-const mysql2 = require("mysql2");
-const dotenv = require("dotenv");
-dotenv.config();
+const { Pool } = require("pg");
+require("dotenv").config();
 
 // Prefer Clever Cloud's MySQL addon env vars if present; otherwise fall back to local .env
 const isCleverCloud =

@@ -1,54 +1,62 @@
-const db = require("../config/dbConfig");
 const { StatusCodes } = require("http-status-codes");
+const pool = require("../config/dbConfig"); // Neon DB connection
 
-// ✅ Like or Unlike answer
+// ======================== TOGGLE LIKE ========================
 exports.toggleLike = async (req, res) => {
   const { answerid, userid } = req.body;
 
-  if (!answerid || !userid)
+  if (!answerid || !userid) {
     return res
       .status(StatusCodes.BAD_REQUEST)
       .json({ message: "Missing data" });
+  }
 
   try {
-    const [existing] = await db.query(
-      "SELECT * FROM answer_likes WHERE answerid = ? AND userid = ?",
+    // Check if already liked
+    const { rows: existing } = await pool.query(
+      "SELECT * FROM answer_likes WHERE answerid=$1 AND userid=$2",
       [answerid, userid]
     );
 
     if (existing.length > 0) {
-      await db.query(
-        "DELETE FROM answer_likes WHERE answerid = ? AND userid = ?",
+      // Unlike
+      await pool.query(
+        "DELETE FROM answer_likes WHERE answerid=$1 AND userid=$2",
         [answerid, userid]
       );
-      res.status(StatusCodes.OK).json({ liked: false });
+      return res.status(StatusCodes.OK).json({ liked: false });
     } else {
-      await db.query(
-        "INSERT INTO answer_likes (answerid, userid) VALUES (?, ?)",
+      // Like
+      await pool.query(
+        "INSERT INTO answer_likes(answerid, userid) VALUES($1,$2)",
         [answerid, userid]
       );
-      res.status(StatusCodes.OK).json({ liked: true });
+      return res.status(StatusCodes.OK).json({ liked: true });
     }
   } catch (err) {
     console.error("❌ Error toggling like:", err);
-    res
+    return res
       .status(StatusCodes.INTERNAL_SERVER_ERROR)
       .json({ message: "Server error" });
   }
 };
 
-// ✅ Get total likes for an answer
+// ======================== GET TOTAL LIKES ========================
 exports.getLikesCount = async (req, res) => {
   const { answerid } = req.params;
+
   try {
-    const [rows] = await db.query(
-      "SELECT COUNT(*) AS likeCount FROM answer_likes WHERE answerid = ?",
+    const { rows } = await pool.query(
+      "SELECT COUNT(*) AS like_count FROM answer_likes WHERE answerid=$1",
       [answerid]
     );
-    res.status(StatusCodes.OK).json(rows[0]);
+
+    const likeCount = parseInt(rows[0].like_count, 10) || 0;
+
+    return res.status(StatusCodes.OK).json({ likeCount });
   } catch (err) {
     console.error("❌ Error fetching likes:", err);
-    res
+    return res
       .status(StatusCodes.INTERNAL_SERVER_ERROR)
       .json({ message: "Server error" });
   }
