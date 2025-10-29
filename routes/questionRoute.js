@@ -22,3 +22,22 @@ router.post("/question", authMiddleware, postQuestion);
 router.put("/question/:questionUuid", authMiddleware, updateQuestion);
 
 module.exports = router;
+
+
+
+
+
+// GET all questions
+router.get('/', authMiddleware, async (req, res) => {
+  try {
+    // Your question logic here
+    res.json({ 
+      message: 'Questions fetched successfully',
+      questions: [] // your questions data
+    });
+  } catch (error) {
+    res.status(500).json({ msg: 'Server error' });
+  }
+});
+
+module.exports = router;
