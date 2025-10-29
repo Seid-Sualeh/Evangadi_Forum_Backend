@@ -40,9 +40,11 @@ async function register(req, res) {
 
     // Insert new user
     const { rows } = await pool.query(
-      "INSERT INTO users(userid, username, email, password) VALUES($1,$2,$3,$4) RETURNING userid, username, email",
-      [userid, username, email, hashedPassword]
+      "INSERT INTO users (username, email, password) VALUES ($1, $2, $3)",
+      [username, email, hashedPassword]
     );
+   
+
 
     const token = generateToken(rows[0]);
     res.status(StatusCodes.CREATED).json({
