@@ -161,7 +161,7 @@ const port = process.env.PORT || 5001;
 
 // ✅ CORS CONFIGURATION
 const allowedOrigins = [
-  "https://evangadi-forum-front-end-coral.vercel.app",
+  "https://seidforum.vercel.app",
   "https://seidforum.netlify.app",
   "http://localhost:3000",
   "http://localhost:3001",
