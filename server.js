@@ -337,17 +337,31 @@ async function createTables() {
         FOREIGN KEY (userid) REFERENCES users(userid)
           ON DELETE CASCADE ON UPDATE CASCADE
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;`,
+
+      // ✅ NEW COMMENTS TABLE
+      `CREATE TABLE IF NOT EXISTS comments (
+        commentid INT AUTO_INCREMENT PRIMARY KEY,
+        answerid INT NOT NULL,
+        userid INT NOT NULL,
+        comment TEXT NOT NULL,
+        createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (answerid) REFERENCES answers(answerid)
+          ON DELETE CASCADE ON UPDATE CASCADE,
+        FOREIGN KEY (userid) REFERENCES users(userid)
+          ON DELETE CASCADE ON UPDATE CASCADE
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;`,
     ];
 
     for (const stmt of sqlStatements) {
       await dbConnection.query(stmt);
     }
 
-    console.log("✅ All tables created successfully");
+    console.log("✅ All tables created successfully (with comments table)");
   } catch (err) {
     console.error("❌ Error creating tables:", err.message);
   }
 }
+
 
 // ======================== START SERVER ========================
 async function startServer() {
