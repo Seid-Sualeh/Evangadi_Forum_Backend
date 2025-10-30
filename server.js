@@ -251,7 +251,7 @@ app.use(express.json());
 // ======================== DEFAULT ROUTE ========================
 // Public root and health endpoints (no auth) for uptime checks
 app.get("/", (req, res) => {
-  res.status(200).send("Evangadi AI Forum Backend is up");
+  res.status(200).send("Evangadi AI Forum Backend is ok");
 });
 app.get("/health", (req, res) => {
   res.status(200).json({ status: "ok", time: new Date().toISOString() });
