@@ -1,5 +1,5 @@
 const { StatusCodes } = require("http-status-codes");
-const pool = require("../config/dbConfig"); // Neon DB connection
+const pool = require("../config/dbConfig"); // MySQL connection
 
 // ======================== ADD COMMENT ========================
 exports.addComment = async (req, res) => {
@@ -13,14 +13,14 @@ exports.addComment = async (req, res) => {
 
   try {
     // 1️⃣ Insert the comment
-    await pool.query(
-      "INSERT INTO comments(answerid, userid, comment) VALUES($1,$2,$3)",
+    await pool.execute(
+      "INSERT INTO comments(answerid, userid, comment) VALUES(?,?,?)",
       [answerid, userid, comment]
     );
 
     // 2️⃣ Increase the comment_count in the related answer
-    await pool.query(
-      "UPDATE answers SET comment_count = COALESCE(comment_count,0)+1 WHERE answerid=$1",
+    await pool.execute(
+      "UPDATE answers SET comment_count = COALESCE(comment_count,0)+1 WHERE answerid=?",
       [answerid]
     );
 
@@ -40,11 +40,11 @@ exports.getCommentsByAnswer = async (req, res) => {
   const { answerid } = req.params;
 
   try {
-    const { rows } = await pool.query(
+    const [rows] = await pool.execute(
       `SELECT c.commentid, c.comment, c.createdAt, u.username
        FROM comments c
        INNER JOIN users u ON c.userid = u.userid
-       WHERE c.answerid = $1
+       WHERE c.answerid = ?
        ORDER BY c.createdAt DESC`,
       [answerid]
     );

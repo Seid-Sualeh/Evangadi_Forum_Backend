@@ -10,13 +10,11 @@ const isCleverCloud =
 const connectionConfig = process.env.MYSQL_ADDON_URI
   ? process.env.MYSQL_ADDON_URI
   : {
-      host: process.env.MYSQL_ADDON_HOST || process.env.DB_HOST ,
+      host: process.env.MYSQL_ADDON_HOST || process.env.DB_HOST,
       user: process.env.MYSQL_ADDON_USER || process.env.DB_USER,
-      password:
-        process.env.MYSQL_ADDON_PASSWORD || process.env.DB_PASS ,
-      database:
-        process.env.MYSQL_ADDON_DB || process.env.DB_DATABASE ,
-      port: Number(process.env.MYSQL_ADDON_PORT ),
+      password: process.env.MYSQL_ADDON_PASSWORD || process.env.DB_PASS,
+      database: process.env.MYSQL_ADDON_DB || process.env.DB_DATABASE,
+      port: Number(process.env.MYSQL_ADDON_PORT || 3306),
       waitForConnections: true,
       connectionLimit: Number(
         process.env.DB_CONNECTION_LIMIT || process.env.CONNECTION_LIMIT || 10

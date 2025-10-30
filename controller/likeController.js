@@ -1,5 +1,5 @@
 const { StatusCodes } = require("http-status-codes");
-const pool = require("../config/dbConfig"); // Neon DB connection
+const pool = require("../config/dbConfig"); // MySQL connection
 
 // ======================== TOGGLE LIKE ========================
 exports.toggleLike = async (req, res) => {
@@ -13,22 +13,22 @@ exports.toggleLike = async (req, res) => {
 
   try {
     // Check if already liked
-    const { rows: existing } = await pool.query(
-      "SELECT * FROM answer_likes WHERE answerid=$1 AND userid=$2",
+    const [existing] = await pool.execute(
+      "SELECT * FROM answer_likes WHERE answerid=? AND userid=?",
       [answerid, userid]
     );
 
     if (existing.length > 0) {
       // Unlike
-      await pool.query(
-        "DELETE FROM answer_likes WHERE answerid=$1 AND userid=$2",
+      await pool.execute(
+        "DELETE FROM answer_likes WHERE answerid=? AND userid=?",
         [answerid, userid]
       );
       return res.status(StatusCodes.OK).json({ liked: false });
     } else {
       // Like
-      await pool.query(
-        "INSERT INTO answer_likes(answerid, userid) VALUES($1,$2)",
+      await pool.execute(
+        "INSERT INTO answer_likes(answerid, userid) VALUES(?,?)",
         [answerid, userid]
       );
       return res.status(StatusCodes.OK).json({ liked: true });
@@ -46,8 +46,8 @@ exports.getLikesCount = async (req, res) => {
   const { answerid } = req.params;
 
   try {
-    const { rows } = await pool.query(
-      "SELECT COUNT(*) AS like_count FROM answer_likes WHERE answerid=$1",
+    const [rows] = await pool.execute(
+      "SELECT COUNT(*) AS like_count FROM answer_likes WHERE answerid=?",
       [answerid]
     );
 
@@ -61,9 +61,3 @@ exports.getLikesCount = async (req, res) => {
       .json({ message: "Server error" });
   }
 };
-
-
-
-
-
-

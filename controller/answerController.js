@@ -1,5 +1,5 @@
 const { StatusCodes } = require("http-status-codes");
-const pool = require("../config/dbConfig"); // Neon DB connection
+const pool = require("../config/dbConfig"); // MySQL connection
 
 // ======================== GET ALL ANSWERS ========================
 exports.getAnswer = async (req, res) => {
@@ -7,8 +7,8 @@ exports.getAnswer = async (req, res) => {
 
   try {
     // Convert UUID to numeric question ID
-    const { rows: questionRows } = await pool.query(
-      "SELECT questionid FROM questions WHERE question_uuid = $1",
+    const [questionRows] = await pool.execute(
+      "SELECT questionid FROM questions WHERE question_uuid = ?",
       [questionUuid]
     );
 
@@ -20,13 +20,13 @@ exports.getAnswer = async (req, res) => {
     const questionid = questionRows[0].questionid;
 
     // Fetch answers with user info
-    const { rows: answers } = await pool.query(
+    const [answers] = await pool.execute(
       `SELECT a.answerid, a.userid AS answer_userid, a.answer, a.createdAt,
               u.username,
               (SELECT COUNT(*) FROM comments c WHERE c.answerid = a.answerid) AS comment_count
        FROM answers a
        JOIN users u ON a.userid = u.userid
-       WHERE a.questionid = $1
+       WHERE a.questionid = ?
        ORDER BY a.createdAt DESC`,
       [questionid]
     );
@@ -55,8 +55,8 @@ exports.postAnswer = async (req, res) => {
     let numericQuestionId = questionid;
 
     if (typeof questionid === "string" && questionid.includes("-")) {
-      const { rows: questionRows } = await pool.query(
-        "SELECT questionid FROM questions WHERE question_uuid = $1",
+      const [questionRows] = await pool.execute(
+        "SELECT questionid FROM questions WHERE question_uuid = ?",
         [questionid]
       );
 
@@ -69,14 +69,14 @@ exports.postAnswer = async (req, res) => {
     }
 
     // Insert answer
-    await pool.query(
-      "INSERT INTO answers(userid, questionid, answer, createdAt) VALUES($1,$2,$3,NOW())",
+    await pool.execute(
+      "INSERT INTO answers(userid, questionid, answer, createdAt) VALUES(?,?,?,NOW())",
       [userid, numericQuestionId, answer]
     );
 
     // Increment answer_count on question
-    await pool.query(
-      "UPDATE questions SET answer_count = COALESCE(answer_count,0)+1 WHERE questionid=$1",
+    await pool.execute(
+      "UPDATE questions SET answer_count = COALESCE(answer_count,0)+1 WHERE questionid=?",
       [numericQuestionId]
     );
 
@@ -104,8 +104,8 @@ exports.updateAnswer = async (req, res) => {
   }
 
   try {
-    const { rows: existingRows } = await pool.query(
-      "SELECT userid FROM answers WHERE answerid=$1",
+    const [existingRows] = await pool.execute(
+      "SELECT userid FROM answers WHERE answerid=?",
       [answerid]
     );
 
@@ -121,10 +121,10 @@ exports.updateAnswer = async (req, res) => {
         .status(StatusCodes.FORBIDDEN)
         .json({ message: "You can only edit your own answers" });
 
-    await pool.query(
-      "UPDATE answers SET answer=$1, updatedAt=NOW() WHERE answerid=$2",
-      [answer, answerid]
-    );
+    await pool.execute("UPDATE answers SET answer=? WHERE answerid=?", [
+      answer,
+      answerid,
+    ]);
 
     return res
       .status(StatusCodes.OK)
