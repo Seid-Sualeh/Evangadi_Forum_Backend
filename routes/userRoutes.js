@@ -17,7 +17,7 @@ router.post("/register", register);
 router.post("/login", login);
 
 // Check authentication
-router.get("/check",  check);
+router.get("/check", authMiddleware, check);
 
 // Forgot password
 router.post("/forgot-password", forgotPassword);

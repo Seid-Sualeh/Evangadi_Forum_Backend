@@ -49,6 +49,8 @@
 // module.exports = authMiddleware;
 
 
+
+
 // middleware/authMiddleware.js
 const { StatusCodes } = require("http-status-codes");
 const jwt = require("jsonwebtoken");
@@ -56,6 +58,12 @@ require("dotenv").config();
 
 async function authMiddleware(req, res, next) {
   const authHeader = req.headers.authorization;
+
+  // Skip auth for health checks and monitoring endpoints
+  if (req.path === "/health" || req.path === "/" || req.method === "OPTIONS") {
+    console.log("✅ Skipping auth for health check/monitoring");
+    return next();
+  }
 
   // Enhanced logging
   console.log("Incoming Headers:", req.headers);

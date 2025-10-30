@@ -1,5 +1,3 @@
-
-
 // require("dotenv").config();
 // const express = require("express");
 // const cors = require("cors");
@@ -212,11 +210,6 @@
 
 // start();
 
-
-
-
-
-
 require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
@@ -256,10 +249,12 @@ app.options("*", cors());
 app.use(express.json());
 
 // ======================== DEFAULT ROUTE ========================
-app.get("/", authMiddleware, (req, res) => {
-  res
-    .status(200)
-    .send("Welcome to Evangadi AI Forum Backend! You are authenticated.");
+// Public root and health endpoints (no auth) for uptime checks
+app.get("/", (req, res) => {
+  res.status(200).send("Evangadi AI Forum Backend is up");
+});
+app.get("/health", (req, res) => {
+  res.status(200).json({ status: "ok", time: new Date().toISOString() });
 });
 
 // ======================== API ROUTES ========================
