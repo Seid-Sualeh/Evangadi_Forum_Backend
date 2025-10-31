@@ -35,3 +35,46 @@ const dbConnection = mysql2.createPool(connectionConfig);
 
 // Export promise-based pool
 module.exports = dbConnection.promise();
+
+
+
+
+
+
+
+
+// const mysql = require("mysql2");
+
+// // Create connection pool
+// const pool = mysql.createPool({
+//   host: process.env.DB_HOST || "localhost",
+//   user: process.env.DB_USER || "mohamed",
+//   password: process.env.DB_PASS || "mohammed",
+//   database: process.env.DB_DATABASE || "myForum",
+//   connectionLimit: process.env.DB_CONNECTION_LIMIT || 20,
+//   waitForConnections: true,
+//   queueLimit: 0,
+//   enableKeepAlive: true,
+//   keepAliveInitialDelay: 0,
+// });
+
+// // Convert to promise-based
+// const promisePool = pool.promise();
+
+// // Test connection
+// async function testConnection() {
+//   try {
+//     const connection = await promisePool.getConnection();
+//     console.log("✅ Database connected successfully");
+//     connection.release();
+//     return true;
+//   } catch (error) {
+//     console.error("❌ Database connection failed:", error.message);
+//     return false;
+//   }
+// }
+
+// module.exports = {
+//   pool: promisePool,
+//   testConnection,
+// };
