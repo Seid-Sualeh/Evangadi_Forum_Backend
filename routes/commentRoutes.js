@@ -6,8 +6,8 @@ const {
 const authMiddleware = require("../middleware/authMiddleware");
 const router = express.Router();
 
-router.post("/comment", authMiddleware, addComment);
-router.get("/comment/:answerid", getCommentsByAnswer);
+router.post("/", authMiddleware, addComment);
+router.get("/:answerid", getCommentsByAnswer);
 
 module.exports = router;
 

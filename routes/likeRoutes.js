@@ -4,8 +4,8 @@ const { toggleLike, getLikesCount } = require("../controller/likeController");
 const authMiddleware = require("../middleware/authMiddleware");
 const router = express.Router();
 
-router.post("/like", authMiddleware, toggleLike);
-router.get("/like/:answerid", getLikesCount);
+router.post("/", authMiddleware, toggleLike);
+router.get("/:answerid", getLikesCount);
 
 module.exports = router;
 
