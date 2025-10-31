@@ -62,15 +62,35 @@ const io = new Server(server, {
   cors: { origin: allowedOrigins, credentials: true },
 });
 
-let onlineUsers = new Set();
+let onlineUsers = new Set(); // stores socket ids
+let onlineUsernames = new Map(); // optional: stores socket.id => username
 
 io.on("connection", (socket) => {
+  console.log(`🔌 Socket connected: ${socket.id}`);
+
   onlineUsers.add(socket.id);
-  io.emit("onlineUsers", onlineUsers.size);
+
+  // Optional: if client sends username
+  socket.on("registerUser", (username) => {
+    onlineUsernames.set(socket.id, username);
+    console.log(`👤 ${username} joined. Total online: ${onlineUsers.size}`);
+  });
+
+  // Broadcast online count
+  io.emit("onlineUsers", {
+    count: onlineUsers.size,
+    users: Array.from(onlineUsernames.values()), // optional
+  });
 
   socket.on("disconnect", () => {
+    console.log(`❌ Socket disconnected: ${socket.id}`);
     onlineUsers.delete(socket.id);
-    io.emit("onlineUsers", onlineUsers.size);
+    onlineUsernames.delete(socket.id);
+
+    io.emit("onlineUsers", {
+      count: onlineUsers.size,
+      users: Array.from(onlineUsernames.values()),
+    });
   });
 });
 
